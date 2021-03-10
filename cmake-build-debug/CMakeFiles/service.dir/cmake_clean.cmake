@@ -1,6 +1,5 @@
 file(REMOVE_RECURSE
-  "CMakeFiles/service.dir/Account.cpp.o"
-  "CMakeFiles/service.dir/service-epoll.cpp.o"
+  "CMakeFiles/service.dir/testmysql.cpp.o"
   "service"
   "service.pdb"
 )

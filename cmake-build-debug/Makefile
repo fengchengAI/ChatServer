@@ -143,59 +143,32 @@ service/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/build
 .PHONY : service/fast
 
-Account.o: Account.cpp.o
+testmysql.o: testmysql.cpp.o
 
-.PHONY : Account.o
-
-# target to build an object file
-Account.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/Account.cpp.o
-.PHONY : Account.cpp.o
-
-Account.i: Account.cpp.i
-
-.PHONY : Account.i
-
-# target to preprocess a source file
-Account.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/Account.cpp.i
-.PHONY : Account.cpp.i
-
-Account.s: Account.cpp.s
-
-.PHONY : Account.s
-
-# target to generate assembly for a file
-Account.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/Account.cpp.s
-.PHONY : Account.cpp.s
-
-service-epoll.o: service-epoll.cpp.o
-
-.PHONY : service-epoll.o
+.PHONY : testmysql.o
 
 # target to build an object file
-service-epoll.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/service-epoll.cpp.o
-.PHONY : service-epoll.cpp.o
+testmysql.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/testmysql.cpp.o
+.PHONY : testmysql.cpp.o
 
-service-epoll.i: service-epoll.cpp.i
+testmysql.i: testmysql.cpp.i
 
-.PHONY : service-epoll.i
+.PHONY : testmysql.i
 
 # target to preprocess a source file
-service-epoll.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/service-epoll.cpp.i
-.PHONY : service-epoll.cpp.i
+testmysql.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/testmysql.cpp.i
+.PHONY : testmysql.cpp.i
 
-service-epoll.s: service-epoll.cpp.s
+testmysql.s: testmysql.cpp.s
 
-.PHONY : service-epoll.s
+.PHONY : testmysql.s
 
 # target to generate assembly for a file
-service-epoll.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/service-epoll.cpp.s
-.PHONY : service-epoll.cpp.s
+testmysql.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/service.dir/build.make CMakeFiles/service.dir/testmysql.cpp.s
+.PHONY : testmysql.cpp.s
 
 # Help Target
 help:
@@ -206,12 +179,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... service"
-	@echo "... Account.o"
-	@echo "... Account.i"
-	@echo "... Account.s"
-	@echo "... service-epoll.o"
-	@echo "... service-epoll.i"
-	@echo "... service-epoll.s"
+	@echo "... testmysql.o"
+	@echo "... testmysql.i"
+	@echo "... testmysql.s"
 .PHONY : help
 
 
