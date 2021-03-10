@@ -1,1 +1,0 @@
-/usr/bin/c++  -g   CMakeFiles/service.dir/service-epoll.cpp.o CMakeFiles/service.dir/Account.cpp.o  -o service  -lpthread 

@@ -1,3 +1,0 @@
-/home/feng/Github/CLionProjects/Unix-Network/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/feng/Github/CLionProjects/Unix-Network/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/feng/Github/CLionProjects/Unix-Network/cmake-build-debug/CMakeFiles/service.dir
