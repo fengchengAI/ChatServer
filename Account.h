@@ -16,56 +16,31 @@
  *
  *
 */
-#include "SQL.h"
-using namespace std;
+#include <mysqlx/xdevapi.h>
 
-class SQL;
+using namespace mysqlx;
+#include "Sql.h"
+
+class Sql;
+
+// user  数据库有几个字段，
 class Account {
 private:
-    string name;
-    int id;
+    std::string name;
     std::size_t password;
-    //hash_box（）；
-    SQL sql;
+    Sql sql;
     bool gender;
-    string location;
-    int number;
+    //string location;
+    //int number;
+    Table table;
 public:
-    bool Sign_up(string name_, string password_,bool gender, string location_, int number)
-    {
-        password = std::hash<std::string>{}(password_);
-
-        //password = hash_box(password_);
-        // 判断合法性。
-        // 更新数据库
-        // 更新日志
-    }
-    bool Sign_in(string name, string password)
-    {
-
-        // 获取数据库
-        // 判断合法性。
-        // 更新日志
-        // 获取离线信息
-    }
-    int getID(){
-        return id;
-    }
-    string getName()
-    {
-        return name;
-    }
-    void getCom()
-    {
-
-    }
-    Account()
-    {
-        sql = GetInstance();
-    }
-
+    bool Sign_up(std::string name_, std::string password_,bool gender_);
+    bool Sign_in(std::string name, std::string password_);
+    std::string getName();
+    void getCom();
+    explicit Account(Table table);
+    ~Account();
 
 };
-
 
 #endif //UNIX_NETWORK_ACCOUNT_H
