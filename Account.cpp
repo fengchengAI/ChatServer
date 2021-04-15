@@ -108,6 +108,7 @@ int main()
     if (flag)
     {
 
+
         ::Client client("127.0.0.1", "fengcheng");
         //::Client client("127.0.0.1", account.getName());
         if (!client.init())

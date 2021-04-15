@@ -92,6 +92,7 @@ void Client::input()
     {   // 这里模拟的是UI发送窗口。
         std::string sentname;
         std::cout<<"请输入接收方用户名"<<std::endl;  //这里默认不能群发消息。
+
         cin>>sentname;
         std::cin.ignore();
         std::cout<<"输入数据类型\n :eg TEXT 1;"<<std::endl;
@@ -102,6 +103,7 @@ void Client::input()
                 std::cout<<"请输入不超过200字符的文本："<<std::endl;
                 // 每次最多可以发送200个字符，加上头文件，name长度（两个用户名）
                 char * mesg = (char *)calloc(246,1);   //这里默认不能群发消息。所以是246
+
                 memcpy(mesg+6,username.c_str(),username.length());
                 memcpy(mesg+26,sentname.c_str(),sentname.length());
 
@@ -167,6 +169,7 @@ void Client::run()
 
         int nfds = epoll_wait(epoll_fd, events, 1 ,-1);
 
+
         for (int i = 0; i < nfds; ++i)
         {
             if(events[i].data.fd == client_fd && events[i].events& EPOLLOUT)
@@ -179,6 +182,7 @@ void Client::run()
                 }
                 std::unique_lock<std::mutex> eplock(etmutex);
                 ev.events =  EPOLLIN | EPOLLET ; //取消epoll的write监视，这里是必须的，具体为什么可以自己尝试修改，看看什么问题？ （程序会一直可写，所有这里是死循环）
+
                 epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
                 eplock.unlock();
             }

@@ -33,12 +33,14 @@ public:
     std::string getValue(std::string  const & name, std::string  const & table);
     Table getTable();
     Table getTable(std::string  const & name);
+
     Session *getSessionPtr()
     {
         return sess;
     }
     bool setValue(std::string  const & name, std::string  const & value, std::string  const & table);
     bool commond(std::string  const & com);
+
 
     Sql()
     {
