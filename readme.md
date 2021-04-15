@@ -1,4 +1,18 @@
 ## UnixNetwork
+
+based on mysql
+
+安装mysqlcooncpp
+在这个网站下载安装三个软件包https://dev.mysql.com/downloads/connector/cpp/
+
+[![c2mjXt.md.png](https://z3.ax1x.com/2021/04/15/c2mjXt.md.png)](https://imgtu.com/i/c2mjXt)
+
+其中libmysqlcppconn-dev_8.0.23-1ubuntu20.04_amd64.deb第三个安装   
+
+
+
+---
+
 此项目就是一个简单的聊天服务器，该服务器支持多人聊天。
 本项目使用协议如下，每个消息都有一个头文件   
 ` 4位开头，4位数据类型，8位接受用户数量，32位数据大小，（最大4g文件）  ` 
@@ -8,16 +22,18 @@
  * 8位接受用户数量表示发送接受方的数量，如群聊时这个就>1,(每个客户端第一次连接到服务器时有一个简单的判断，有一个固定的头文件，该头文件中用户数量为0，后面携带发送方的名字。)  
  * 32位数据大小为数据长度。   
     该头文件6个字节，后面紧跟20个字节的发送方用户名，然后再跟接受方的用户名，每个用户名不超过20字节。要显示用户名，就遍历20字节的数据，直到遇到空格字符或者0。   
+---
+
 #### 其中项目结构为：
 
 * sql.h  sql.cpp   
 
-   提供了对sql库的访问，sql库主要存储了有关账户的一些信息。这个文件依赖<mysqlx/xdevapi.h>头文件，需要自行安装。为测试改程序，建议本地安装mysql服务，为方便多用户测试（需要部署云服务器，或者局域网)，教程如下https://www.zhihu.com/people/liu-xin-65-77
-
+   提供了对sql库的访问，sql库主要存储了有关账户的一些信息。这个文件依赖<mysqlx/xdevapi.h>头文件，需要自行安装。为测试改程序，建议本地安装mysql服务，为方便多用户测试（需要部署云服务器，或者局域网)。关于mysql的一些安装可以参考https://www.zhihu.com/people/liu-xin-65-77
 * 
    Log.h 这也是一个工具类，只要是打印log
 
 *  service-jincheng.cpp， service_thread.cpp mmap.cpp都是测试其他三个高并发对应的test，并不是本项目工作。
+---
 
 本项目有两个主函数，一个在account下，一个在service下，其中client在account下被调用。
 

@@ -26,6 +26,7 @@ private:
     std::mutex lock;    // 针对messagebuf加锁，副线程中对messagebuf增加push，主线程中对messagebuf 进行pop
     std::mutex etmutex; // 针对epoll加锁，在副线程中对服务器对epoll添加out权限，在主线程中取消out权限
 
+
 public:
     Client(std::string service_ip, std::string username);
     void input();

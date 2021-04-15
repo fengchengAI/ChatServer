@@ -22,6 +22,7 @@
 #include <memory>
 using namespace std;
 
+
 void Service::do_recv(std::string name, char *data, u_int32_t length, TYPE type)
 {
     if (type == TYPE::TEXT)
@@ -50,6 +51,7 @@ bool Service::init()
     {
         std::cerr<<"socket 创建失败 :"<<errno <<strerror(errno);
     }
+
     if (bind(servicefd, (struct sockaddr *)&service_addr, sizeof service_addr))
     {
         std::cerr<<"bind error :"<<errno <<strerror(errno);
@@ -118,11 +120,13 @@ void Service::run()
         for (int i = 0; i < nfds; ++i)
         {
             if(clientfds.count(events[i].data.fd) && events[i].events& EPOLLOUT)  // 可写
+
             {
                 while (!messagebuf[id2name[events[i].data.fd]].empty())
                 {
                     std::pair<std::shared_ptr<char>, u_int32_t> data = pop(events[i].data.fd);
                     // TODO 什么时候free（data.first）
+
                     char* buf= data.first.get();
 
                     bzero(buf+ 26,20);
@@ -133,6 +137,7 @@ void Service::run()
                 epoll_ctl(epoll_fd, EPOLL_CTL_MOD, ev.data.fd, &ev);
             }
             if(clientfds.count(events[i].data.fd)&& events[i].events & EPOLLIN) //可读
+
             {
 
                 u_int8_t type;
@@ -145,6 +150,7 @@ void Service::run()
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
                     decode(version,type,users,datalength);
                     if (version==0 && type == 5 && users == 0&& datalength ==0)  // 客户端第一次发送消息
+
                     {
                         std::cout<<"new client connecting to service "<<std::endl;
                         char buf[20];
@@ -195,6 +201,7 @@ void Service::run()
                 }
             }
             if (servicefd == events[i].data.fd && events[i].events& EPOLLIN)  // 新的连接,客户端connect
+
             {
                 int conn_sock;
                 sockaddr_in remote;

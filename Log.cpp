@@ -17,6 +17,7 @@ Log::Level Log::level(INFO);
 static const array<string,6> name = {"ALL","INFO","WARN","ERROR","FATAL","OFF"};
 ofstream Log::output(DEFAULT_LOG_PATH,ios_base::out|ios_base::app);
 
+
 void Log::log(const string &message, Level level) {
 
 #ifdef ENABLE_LOG
