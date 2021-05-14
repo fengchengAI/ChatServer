@@ -18,17 +18,28 @@
 #include "Client.h"
 #include "utils.h"
 #include "config.h"
+using ::Client;
 
-
-void Client::do_recv(std::string name, char const *data, u_int32_t length, TYPE type)
+void ::Client::do_recv(std::string name, char const *data, u_int32_t length, TYPE type)
 {
     if (type == TYPE::TEXT)
     {
         std::cout.write(data,length);
         std::fflush(0);
+        std::cout<<"reve from "<<name<< " "<<length<<"字节数据"<<std::endl;
+
+    }else if (type == TYPE::FRIEND)
+    {
+        int message_id = get4BitInt(data);
+        responsebuf.push_back({message_id, string (data,length-4)});
+    }else if(type == TYPE::ROOM){
+
+    } else
+    {
+
     }
+
     delete data;
-    std::cout<<"reve from "<<name<< " "<<length<<"字节数据"<<std::endl;
 }
 void Client::do_sent(std::string name, char const * data, u_int32_t length, TYPE type)
 {
@@ -88,30 +99,53 @@ bool Client::init()
 
 void Client::input()
 {
-    while (1)
-    {   // 这里模拟的是UI发送窗口。
-        std::string sentname;
-        std::cout<<"请输入接收方用户名"<<std::endl;  //这里默认不能群发消息。
+    // 这里模拟的是UI发送窗口。
+    bool flag;
+    while (flag)
+    {
 
-        cin>>sentname;
-        std::cin.ignore();
         std::cout<<"输入数据类型\n :eg TEXT 1;"<<std::endl;
         switch (fgetc(stdin)-48)
         {
-            case 1:
+            case TYPE::TEXT:
             {
+
+                std::string sentname = getName() ;
                 std::cout<<"请输入不超过200字符的文本："<<std::endl;
-                // 每次最多可以发送200个字符，加上头文件，name长度（两个用户名）
-                char * mesg = (char *)calloc(246,1);   //这里默认不能群发消息。所以是246
-
-                memcpy(mesg+6,username.c_str(),username.length());
-                memcpy(mesg+26,sentname.c_str(),sentname.length());
-
-                std::cin.ignore();
-                fgets(mesg+46,200, stdin);
-                encode(12, 1, 1,strlen(mesg+46));
-                memcpy(mesg, messagehead_w,6);
-                push(std::make_pair(mesg,46+strlen(mesg+46)));
+                std::pair<const char *, size_t> message_body = getData();
+                encode(12, 1, TYPE::TEXT, message_body.second);
+                char * message = generateData(sentname, message_body.first, message_body.second, -1);
+                push(std::make_pair(message, 46+message_body.second));
+                std::unique_lock<std::mutex> eplock(etmutex);
+                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+                eplock.unlock();
+                break;
+            }
+            case TYPE::FRIEND:
+            {
+                std::cout<<"请输入好友用户名"<<std::endl;
+                string name = getName() ;
+                int id = getRandValue();
+                command[id] = std::pair<TYPE, string>{TYPE::FRIEND, name};
+                encode(12, 1, TYPE::FRIEND, 4);
+                char * message = generateData(name, nullptr, 4, id);
+                push(std::make_pair(message, 50));
+                std::unique_lock<std::mutex> eplock(etmutex);
+                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+                eplock.unlock();
+                break;
+            }
+            case TYPE::ROOM:
+            {
+                std::cout<<"请输入群员信息，成员之间以‘，’分割，以换行结束"<<std::endl;
+                string name = getName();
+                int id = getRandValue();
+                command[id] = std::pair<TYPE, string>{TYPE::ROOM, name};
+                encode(12, 1, TYPE::ROOM, name.length());
+                char * message = generateData(string(), name.c_str(), name.length()+4, id);
+                push(std::make_pair(message, 50+name.length()));
                 std::unique_lock<std::mutex> eplock(etmutex);
                 ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
                 epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
@@ -141,25 +175,26 @@ void Client::push(std::pair<char const *, u_int32_t> data) {
 
 // 4位开头，4位数据类型，8位接受用户数量，32位数据大小，（最大4g文件）
 
-void Client::encode(u_int8_t version, u_int8_t type, u_int8_t users, u_int32_t datalength)
+void Client::encode(u_int8_t version, u_int8_t type, u_int8_t options, u_int32_t datalength)
 {
     messagehead_w[0] = type + (version<<4);
-    messagehead_w[1] = users;
+    messagehead_w[1] = options;
     messagehead_w[2] = datalength & 0xff000000 ;
     messagehead_w[3] = datalength & 0x00ff0000 ;
     messagehead_w[4] = datalength & 0x0000ff00 ;
     messagehead_w[5] = datalength & 0x000000ff ;
 }
-void Client::decode(u_int8_t &version, u_int8_t &type, u_int8_t &users, u_int32_t &datalength) {
+void Client::decode(u_int8_t &version, u_int8_t &type, u_int8_t &options, u_int32_t &datalength) {
 
     datalength = static_cast<u_int32_t >(messagehead_r[5] + (messagehead_r[4]<<8) + (messagehead_r[3]<<16) + (messagehead_r[2]<<24));
-    users  = static_cast<u_int8_t >(messagehead_r[1]);
+    options  = static_cast<u_int8_t >(messagehead_r[1]);
     type = static_cast<u_int8_t>(messagehead_r[0] & 0x0f);
     version = static_cast<u_int8_t >(messagehead_r[0] & 0xf0);
 }
 
-Client::Client(std::string ip, std::string username):ip(ip),username(username)
+Client::Client(std::string ip, Account account_):ip(ip),account(account_)
 {
+
 }
 
 void Client::run()
@@ -194,7 +229,7 @@ void Client::run()
                 u_int8_t users;
                 u_int32_t datalength;
 
-                int n; // 这里很重要只要读取到头消息，就一定要读取完整，阻塞读取直到读完一个完整的数据。即在tou中指定的size
+                int n; // 这里很重要只要读取到头消息，就一定要读取完整，阻塞读取直到读完一个完整的数据。即在协议中指定的size
                 while ((n = read(events[i].data.fd, messagehead_r, 6))>0)
                 {
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
@@ -220,7 +255,8 @@ void Client::run()
                             cerr<<"read error, data not my";
                             continue;
                         }
-                        databuf_r = (char *)(malloc(datalength));
+                        //if (type)
+                        databuf_r = (char *)(calloc(datalength, sizeof (char)));
                         readdata(events[i].data.fd, databuf_r, datalength);
                         do_recv(chartostring(sendname,20), databuf_r, datalength, static_cast<TYPE>(type));
                     }
@@ -228,4 +264,52 @@ void Client::run()
             }
         }
     }
+}
+
+char *Client::generateData(string name, const char *buf, size_t length, int message_id) {
+    char *ptr = (char *) calloc(46+length, 1);
+    memcpy(ptr, messagehead_w, 6);
+    memcpy(ptr+6, username.c_str(), 20);
+    memcpy(ptr+26, name.c_str(), 20);
+    if (message_id==-1)
+        memcpy(ptr+46, buf, length);
+    else{
+        ptr[46] = message_id & 0xff000000 ;
+        ptr[47] = message_id & 0x00ff0000 ;
+        ptr[48] = message_id & 0x0000ff00 ;
+        ptr[49] = message_id & 0x000000ff ;
+        memcpy(ptr+50, buf, length-4);
+    }
+    return ptr;
+}
+
+string Client::getName(bool isRoom) {
+    std::string sentname;
+    std::cout<<"请输入用户名"<<std::endl;
+    cin>>sentname;
+    return sentname;
+}
+
+std::pair<const char *, size_t> Client::getData() {
+    std::string data;
+    std::cout<<"请输入数据"<<std::endl;
+    cin>>data;
+    return {data.c_str(), data.length()};
+}
+
+void Client::home() {
+    //返回聊天主页面
+    //此时可以添加好友，建立群消息，也可以应答命令。
+    // 可以选择聊天对象。
+}
+
+
+
+void Client::changechat(std::string name) {
+    //进入与name聊天的对话框中
+    // name 是一个聊天室名称（群聊），或者一个用户名（1对1）
+}
+
+void Client::parse(std::string command, std::string filter) {
+    // 对command的解析，其中command的命令限制在filter开头。
 }

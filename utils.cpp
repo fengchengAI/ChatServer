@@ -104,3 +104,16 @@ bool writedata(int fd, const char *buf, int length)
         buf+=n;
     }
 }
+
+// [left,right]
+int getRandValue(int left, int right){
+    unsigned seed;  // Random generator seed
+    // Use the time function to get a "seed” value for srand
+    seed = time(0);
+    srand(seed);
+    return  rand() % right + left;
+}
+
+int get4BitInt(char const *buf){
+    return static_cast<u_int32_t >(buf[3] + (buf[2]<<8) + (buf[1]<<16) + (buf[0]<<24));
+}

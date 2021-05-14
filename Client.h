@@ -4,8 +4,11 @@
 
 #ifndef UNIX_NETWORK_CLIENT_H
 #define UNIX_NETWORK_CLIENT_H
+
 #include "config.h"
+#include "Account.h"
 #include <deque>
+
 #include <sys/epoll.h>
 #include <mutex>
 class Client {
@@ -14,6 +17,7 @@ private:
     int epoll_fd;
     std::string username;
     std::string path;
+    std::string nowchat;  // 因为始终只能和一个用户同时聊天；
     std::string ip;
     int client_fd;
     char messagehead_r[6];
@@ -21,15 +25,25 @@ private:
     char messagehead_w[6];  // 写数据用到的
     char * databuf_r;
     const char * databuf_w ;  // 写数据用到。
+    std::deque<std::pair<int, string> >  responsebuf;
     std::deque<std::pair<char const * , u_int32_t>> messagebuf;  //这里是消息池，每个要方法的信息都会暂存在这里
+    std::map<int, std::pair<TYPE, string> > command; //第一个int表示命令的id，TYPE表示命令类型，
+
 
     std::mutex lock;    // 针对messagebuf加锁，副线程中对messagebuf增加push，主线程中对messagebuf 进行pop
     std::mutex etmutex; // 针对epoll加锁，在副线程中对服务器对epoll添加out权限，在主线程中取消out权限
-
+    Account account;
 
 public:
-    Client(std::string service_ip, std::string username);
+    void changechat(std::string);
+    void home();
+    void parse(std::string command, std::string filter = string());
+    std::pair<const char *, size_t> getData();
+    string getName(bool isRoom = false);
+
+    Client(std::string service_ip, Account account);
     void input();
+    char * generateData(string name, const char *buf, size_t length,  int message_id);
     void encode(u_int8_t version_,u_int8_t namelength, u_int8_t type, u_int32_t datalengtyh);
     void decode(u_int8_t &version_,u_int8_t &namelength, u_int8_t &type, u_int32_t &datalengtyh);
     void do_recv(std::string name, char const *data, u_int32_t length, TYPE type);

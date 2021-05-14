@@ -16,14 +16,14 @@
 #include <vector>
 #include <cerrno>
 #include <sys/epoll.h>
-#include "Service.h"
+#include "Server.h"
 #include "utils.h"
 #include "config.h"
 #include <memory>
 using namespace std;
 
 
-void Service::do_recv(std::string name, char *data, u_int32_t length, TYPE type)
+void Server::do_recv(std::string name, char *data, u_int32_t length, TYPE type)
 {
     if (type == TYPE::TEXT)
     {
@@ -32,13 +32,13 @@ void Service::do_recv(std::string name, char *data, u_int32_t length, TYPE type)
     }
     std::cout<<"reve from "<<name<< " "<<length<<"字节数据"<<std::endl;
 }
-void Service::do_sent(std::string name, char * data, u_int32_t length, TYPE type)
+void Server::do_sent(std::string name, char * data, u_int32_t length, TYPE type)
 {
 
 }
 
 
-bool Service::init()
+bool Server::init()
 {
 
     sockaddr_in service_addr;
@@ -81,17 +81,17 @@ bool Service::init()
 
 }
 
-std::pair<std::shared_ptr<char>, u_int32_t> Service::pop(int fd) {
+std::pair<std::shared_ptr<char>, u_int32_t> Server::pop(int fd) {
     std::pair<std::shared_ptr<char>, u_int32_t> temp = messagebuf[id2name[fd]].front();
     messagebuf[id2name[fd]].pop_front();
     return temp;
 }
 
-void Service::push(int fd, std::pair<std::shared_ptr<char>, u_int32_t> data) {
+void Server::push(int fd, std::pair<std::shared_ptr<char>, u_int32_t> data) {
      messagebuf[id2name[fd]].push_back(data);
 }
 
-void Service::encode(u_int8_t version, u_int8_t type, u_int8_t users, u_int32_t datalength)
+void Server::encode(u_int8_t version, u_int8_t type, u_int8_t users, u_int32_t datalength)
 {
     messagehead_w[0] = type + (version<<4);
     messagehead_w[1] = users;
@@ -100,18 +100,18 @@ void Service::encode(u_int8_t version, u_int8_t type, u_int8_t users, u_int32_t 
     messagehead_w[4] = datalength & 0x0000ff00 ;
     messagehead_w[5] = datalength & 0x000000ff ;
 }
-void Service::decode(u_int8_t &version, u_int8_t &type, u_int8_t &users, u_int32_t &datalength) {
+void Server::decode(u_int8_t &version, u_int8_t &type, u_int8_t &users, u_int32_t &datalength) {
 
     datalength = static_cast<u_int32_t >(messagehead_r[5] + (messagehead_r[4]<<8) + (messagehead_r[3]<<16) + (messagehead_r[2]<<24));
     users  = static_cast<u_int8_t >(messagehead_r[1]);
     type = static_cast<u_int8_t>(messagehead_r[0] & 0x0f);
     version = static_cast<u_int8_t >(messagehead_r[0] & 0xf0);
 }
-Service::Service()
+Server::Server()
 {
 }
 
-void Service::run()
+void Server::run()
 {
     while (servicefd>0)
     {
@@ -221,7 +221,7 @@ void Service::run()
     }
 }
 
-void Service::destroy()
+void Server::destroy()
 {
     close(servicefd);
     for(int fd : clientfds)
@@ -230,20 +230,20 @@ void Service::destroy()
     }
 }
 
-Service::~Service()
+Server::~Server()
 {
     destroy();
 }
 
 void handle(int)
 {
-    std::cout<<"Service now exit"<<std::endl;
-    static Service service;
+    std::cout<<"Server now exit"<<std::endl;
+    static Server service;
     service.destroy();
 }
 int main()
 {
-    Service service;
+    Server service;
 
     /*
     struct sigaction sig;
