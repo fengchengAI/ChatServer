@@ -2,8 +2,8 @@
 // Created by feng on 2021/3/15.
 //
 
-#ifndef UNIX_NETWORK_SERVICE_H
-#define UNIX_NETWORK_SERVICE_H
+#ifndef UNIX_NETWORK_SERVER_H
+#define UNIX_NETWORK_SERVER_H
 
 #include <deque>
 #include <mutex>
@@ -13,7 +13,7 @@
 #include "config.h"
 #include <vector>
 #define NUMS 100
-class Service
+class Server
 {
 private:
     struct epoll_event ev, events[NUMS];
@@ -34,8 +34,8 @@ private:
 
 
 public:
-    Service();
-    ~Service();
+    Server();
+    ~Server();
     void encode(u_int8_t version_,u_int8_t users, u_int8_t type, u_int32_t datalengtyh);
     void decode(u_int8_t &version_,u_int8_t &users, u_int8_t &type, u_int32_t &datalengtyh);
     void do_recv(std::string name, char *data, u_int32_t length, TYPE type);
@@ -46,4 +46,4 @@ public:
     void run();
     void destroy();
 };
-#endif //UNIX_NETWORK_SERVICE_H
+#endif //UNIX_NETWORK_SERVER_H

@@ -17,8 +17,9 @@
  *
 */
 #include <mysqlx/xdevapi.h>
+#include <string>
+using mysqlx::Table;
 
-using namespace mysqlx;
 #include "Sql.h"
 
 class Sql;
@@ -32,14 +33,22 @@ private:
     bool gender;
     //string location;
     //int number;
-    Table table;
+    Sql *sql_ptr;
+    std::vector<std::string> friends;
+    std::vector<std::string> rooms;
+    std::map<std::string, std::vector<std::string>> roomsmembers;
 public:
+    std::string makeFriend();
+    std::string makeRoom();
+    bool response();
+    void init();
     bool Sign_up(std::string name_, std::string password_,bool gender_);
     bool Sign_in(std::string name, std::string password_);
     std::string getName();
-    void getCom();
-    explicit Account(Table table);
+
+    explicit Account(Sql* s_ptr):sql_ptr(s_ptr){};
     ~Account();
+
 
 };
 
