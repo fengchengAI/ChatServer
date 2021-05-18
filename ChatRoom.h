@@ -18,7 +18,7 @@ struct message_body{
     size_t length;
 };
 
-class ChatRoom {
+<<<<<<< HEAD
 public:
     void init();
 private:

@@ -53,6 +53,7 @@ bool Account::Sign_in(std::string name_, std::string password_)
             .bind("name_", name_).bind("password_", std::to_string(password))
             .execute();
 
+
     Row data = myResult.fetchOne();
     if (!myResult.count()|| data[3].BOOL == true)
     {
@@ -190,3 +191,23 @@ int main()
         read_thread.join();
     }
 }
+/*
+
+
+CREATE TABLE `room`(
+`id` INT UNSIGNED AUTO_INCREMENT,
+`name` CHAR(20) NOT NULL,
+`members` VARCHAR (4600) NOT NULL,
+`registration_date` DATETIME NOT NULL,
+ PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `friendship`(
+`id` INT UNSIGNED AUTO_INCREMENT,
+`name1` CHAR(20) NOT NULL,
+`name2` CHAR(20) NOT NULL,
+`registration_date` DATETIME NOT NULL,
+PRIMARY KEY (`id`)
+);
+
+ */

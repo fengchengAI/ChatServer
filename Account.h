@@ -19,6 +19,7 @@
 */
 #include <mysqlx/xdevapi.h>
 #include <string>
+using mysqlx::Table;
 
 #include "Sql.h"
 #include "ChatRoom.h"
