@@ -19,35 +19,34 @@
 */
 #include <mysqlx/xdevapi.h>
 #include <string>
+#include <unordered_map>
 
 #include "Sql.h"
 #include "ChatRoom.h"
 
-using mysqlx::Table;
-class Sql;
 
-// user  数据库有几个字段，
 class Account {
 private:
     std::string name;
     std::size_t password;
-    Sql sql;
     bool gender;
     Sql *sql_ptr;
     std::vector<std::string> friends;
     std::vector<std::string> rooms;
     std::map<std::string, std::vector<std::string>> roomsmembers;
-    std::unordered_map<std::string, ChatRoom*> activate_room;
+    std::deque<Announcement> notice;
+
 public:
 
-    std::string makeFriend();
-    std::string makeRoom();
     bool response(std::string data);
     void init();
-    bool Sign_up(std::string name_, std::string password_,bool gender_);
-    bool Sign_in(std::string name, std::string password_);
+    bool Sign_up(std::string name_, std::string password_, bool gender_);
+    bool Sign_in(std::string name_, std::string password_);
     std::string getName();
-
+    std::vector<std::string> const & getfriends() const;
+    std::vector<std::string> const & getrooms() const;
+    std::deque<Announcement> const & getnotice() const;
+    void addactivate_room(std::string name);
     explicit Account(Sql* s_ptr):sql_ptr(s_ptr){};
     ~Account();
 

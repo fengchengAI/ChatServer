@@ -4,6 +4,7 @@
 
 #include <string>
 #include <thread>
+
 #include "utils.h"
 #include "Client.h"
 #include "Account.h"
@@ -12,6 +13,15 @@
 using mysqlx::RowResult;
 using mysqlx::Row;
 
+std::deque<Announcement> const & Account::getnotice() const{
+    return notice;
+}
+std::vector<std::string> const & Account::getfriends() const{
+    return friends;
+}
+std::vector<std::string> const & Account::getrooms() const{
+    return rooms;
+}
 bool Account::Sign_up(std::string name_, std::string password_,bool gender_)
 {
 
@@ -53,6 +63,7 @@ bool Account::Sign_in(std::string name_, std::string password_)
             .bind("name_", name_).bind("password_", std::to_string(password))
             .execute();
 
+
     Row data = myResult.fetchOne();
     if (!myResult.count()|| data[3].BOOL == true)
     {
@@ -88,7 +99,7 @@ Account::~Account() {
     table.update().set("status", false).where("name = :name_ AND password =:password_")
             .bind("name_", name).bind("password_", std::to_string(password))
             .execute();
-    sql.getSessionPtr()->close();
+    sql_ptr->getSessionPtr()->close();
     std::cout<<"Bye ..."<<std::endl;
 }
 
@@ -183,10 +194,30 @@ int main()
         }
         std::thread read_thread([&client]()
                                 {
-                                    client.input();
+                                    client.ui();
                                 });// 开启另一个线程主要是为了随时准备写数据（即发送数据），这里可以先叫这个线程是副线程
         client.run();  // 主线程
 
         read_thread.join();
     }
 }
+/*
+
+
+CREATE TABLE `room`(
+`id` INT UNSIGNED AUTO_INCREMENT,
+`name` CHAR(20) NOT NULL,
+`members` VARCHAR (4600) NOT NULL,
+`registration_date` DATETIME NOT NULL,
+ PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `friendship`(
+`id` INT UNSIGNED AUTO_INCREMENT,
+`name1` CHAR(20) NOT NULL,
+`name2` CHAR(20) NOT NULL,
+`registration_date` DATETIME NOT NULL,
+PRIMARY KEY (`id`)
+);
+
+ */

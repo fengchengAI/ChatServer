@@ -3,6 +3,7 @@
 历史消息记录存储在本地mysql，未应答的数据，或者离线未接受的数据放在服务器。
 
 
+
 ###  desc room;   
 
 name表示这个群聊名称，members表示群的成员，成员之间用‘，’隔开，最多支持
@@ -52,6 +53,7 @@ status表示当前用户状态，一个重要的信息是一个用户不能同�
 | password   | varchar(20)  | NO   |     | <null>  |                |
 | gender     | tinyint(1)   | NO   |     | <null>  |                |
 | last_lojin | datetime     | NO   |     | <null>  |                |
+<<<<<<< HEAD
 | status     | tinyint      | NO   |     | <null>  |                |
 
 
@@ -69,3 +71,6 @@ type为消息类型， message_id为消息id，messagebody为消息体，
 | messagebody | varchar(230)     | YES  |     | <null>  |                |
 | time        | datetime         | NO   |     | <null>  |                |
 
+=======
+| status     | tinyint      | NO   |     | <null>  |                |
+>>>>>>> d4b068e54f55c508467a1691ace861d2b8eb5e09

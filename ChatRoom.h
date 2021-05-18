@@ -10,23 +10,31 @@
 #include <map>
 
 #include "config.h"
+struct Announcement{
+    std::string sender_;
+    TYPE type;  // 如果是普通消息就使用nums标记数量，如果是请求命令，就使用data数据。
+    std::string data;
+    int nums;
+};
+
 struct message_body{
-    std::string name;  // 发送方
+    std::string receiver_;
+    std::string sender_;
     TYPE type;
     int message_id;
     char *data;
     size_t length;
 };
-
-class ChatRoom {
+class ChatRoom{
 public:
     void init();
 private:
     // 模拟一个聊天框架。
     bool is_group;
-    std::string const &name;  // 聊天室名称，或者接收方用户名称
-    std::deque<std::pair<char const * , u_int32_t>> messagebuf;  //这里是消息池，每个要方法的信息都会暂存在这里
-    ChatRoom(std::string name_, bool is_group_ = false):name(name_), is_group(is_group_){}
+    std::string const &receiver;  // 聊天室名称，或者接收方用户名称
+    std::string const &sender;
+    std::deque<message_body> messagebuf;  //这里是消息池
+    ChatRoom(std::string receiver_, std::string sender_, bool is_group_ = false);//
 };
 
 

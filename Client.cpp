@@ -97,9 +97,10 @@ bool Client::init()
 }
 
 
-void Client::input()
+void Client::ui()
 {
     // 这里模拟的是UI发送窗口。
+    home();
     bool flag;
     while (flag)
     {
@@ -245,7 +246,6 @@ void Client::run()
                     }
                     else  // 正常聊天消息
                     {
-                        char sendname[20];
                         readdata(client_fd, sendname, 20);
                         char myname[20];
                         readdata(client_fd, myname, 20);
@@ -254,13 +254,9 @@ void Client::run()
                         {
                             cerr<<"read error, data not my";
                             continue;
-                        }
-                        //if (type)
-                        databuf_r = (char *)(calloc(datalength, sizeof (char)));
-                        readdata(events[i].data.fd, databuf_r, datalength);
-                        do_recv(chartostring(sendname,20), databuf_r, datalength, static_cast<TYPE>(type));
-                    }
-                }
+                        }    
+                    }    
+                }    
             }
         }
     }
@@ -283,33 +279,96 @@ char *Client::generateData(string name, const char *buf, size_t length, int mess
     return ptr;
 }
 
-string Client::getName(bool isRoom) {
-    std::string sentname;
-    std::cout<<"请输入用户名"<<std::endl;
-    cin>>sentname;
-    return sentname;
-}
 
-std::pair<const char *, size_t> Client::getData() {
-    std::string data;
-    std::cout<<"请输入数据"<<std::endl;
-    cin>>data;
-    return {data.c_str(), data.length()};
-}
 
 void Client::home() {
-    //返回聊天主页面
-    //此时可以添加好友，建立群消息，也可以应答命令。
+    // 返回聊天主页面
+    // 此时可以添加好友，建立群消息，也可以应答命令。
     // 可以选择聊天对象。
+    // show contact, do 0, d0 1, deal 2, select li;
+    for (auto n: account.getnotice())
+    {
+        if (n.type == FRIEND )
+        {
+            std::cout<<n.sender_<<"请求添加好友"<<std::endl;
+        }else if(n.type == ROOM){
+            std::cout<<n.sender_<<"请求加入群聊："<<n.data<<std::endl;
+        }else {
+            std::cout<<n.sender_<<"发送"<<n.nums<<"条消息"<<std::endl;
+        }
+    }
+    string data;
+
+    std::cin>>data;
+    if ()
+    {
+        /* code */
+    }
+    
+    
+    
+
 }
 
+void Client::showfriend(){
 
+    std::vector<std::string> friends = account.getfriends();
+    cout<<"好友数量："<<friends.size()<<endl;
+    for (size_t i = 0; i < friends.size(); i++)
+    {
+        std::cout<<friends.at(i)<<std::endl;
+    }
+
+    std::vector<std::string> rooms = account.getrooms();
+    cout<<"群聊数量："<<rooms.size()<<endl;
+    for (size_t i = 0; i < rooms.size(); i++)
+    {
+        std::cout<<rooms.at(i)<<std::endl;
+    }
+
+}
 
 void Client::changechat(std::string name) {
-    //进入与name聊天的对话框中
+    // 进入与name聊天的对话框中
     // name 是一个聊天室名称（群聊），或者一个用户名（1对1）
+    std::vector<std::string> room = account.getfriends();
+    if (std::find(room.begin(), room.end(), name)!= room.end())
+    {
+        if ()
+        {
+            /* code */
+        }
+        
+    }
+    
 }
+std::string Client::makeFriend(){
+    string data;
+    std::cout<<"请输入添加好友的名称"<<std::endl;
+    std::cin>>data;
+    return data;
+}
+std::string Client::makeRoom(){
 
-void Client::parse(std::string command, std::string filter) {
+}
+bool Client::parse(std::string command, std::string filter) {
     // 对command的解析，其中command的命令限制在filter开头。
+    // show contact, do 0, d0 1, deal, select;
+    if (filter.find(command)!=std::string::npos)
+    {
+        if (command == "show contact")
+        {
+            showfriend();
+        }else if(command == "do 0"){
+            //添加好友
+        }else if(command == "do 1"){
+            //添加群聊
+        }else if(command.find("deal")!=std::string::npos){
+            // 对这个请求应答
+        }else if(command.find("select")!=std::string::npos){
+            string name = string(command.find("select")+7+command.begin(), command.end());
+            changechat(name);
+        }  
+    }else 
+        return 0;
 }
