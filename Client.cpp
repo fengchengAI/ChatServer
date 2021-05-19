@@ -304,10 +304,6 @@ void Client::home() {
     {
         /* code */
     }
-    
-    
-    
-
 }
 
 void Client::showfriend(){
