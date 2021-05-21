@@ -42,6 +42,7 @@ public:
     void home();
     bool parse(std::string command, std::string filter = string());
     bool response(int messageid);
+
     Client(std::string service_ip, Account account);
     void ui();
     void showfriend();

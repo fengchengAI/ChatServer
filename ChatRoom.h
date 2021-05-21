@@ -40,7 +40,7 @@ private:
     std::string const &receiver;  // 聊天室名称，或者接收方用户名称
     std::string const &sender;
     std::deque<message_body> messagebuf;  //这里是消息池
-    //
+
 };
 
 
