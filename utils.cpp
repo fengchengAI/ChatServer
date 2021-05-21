@@ -11,22 +11,14 @@
 
 std::string getDateTime()
 {
-    std::string str;
+    //std::string str;
     time_t now = time(0);
     tm *ltm = localtime(&now);
+    char buffer[80];
     // 输出 tm 结构的各个组成部分
-    str.append(to_string(ltm->tm_year+1900));
-    str.append(1,'-');
-    str.append(to_string(ltm->tm_mon+1));
-    str.append(1,'-');
-    str.append(to_string(ltm->tm_mday));
-    str.append(1,' ');
-    str.append(to_string(ltm->tm_hour));
-    str.append(1,':');
-    str.append(to_string(ltm->tm_min));
-    str.append(1,':');
-    str.append(to_string(ltm->tm_sec));
-    return str;
+
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", ltm);
+    return string (buffer);
 }
 
 void setSockNonBlock(int sock)

@@ -149,7 +149,7 @@ void Server::run()
                 {
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
                     decode(version,type,users,datalength);
-                    if (version==0 && type == 5 && users == 0&& datalength ==0)  // 客户端第一次发送消息
+                    if (version==VERSION && type == CONNECT && users == 0&& datalength ==0)  // 客户端第一次发送消息
 
                     {
                         std::cout<<"new client connecting to service "<<std::endl;

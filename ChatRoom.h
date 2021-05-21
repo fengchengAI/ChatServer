@@ -17,24 +17,30 @@ struct Announcement{
     int nums;
 };
 
-struct message_body{
-    std::string receiver_;
-    std::string sender_;
-    TYPE type;
-    int message_id;
-    char *data;
-    size_t length;
+class message_body{
+public:
+        std::string receiver_;
+        std::string sender_;
+        TYPE type;
+        int message_id;
+        const char *data;
+        size_t length;
+        bool is_group;
+        message_body(bool is_group = false):data(nullptr),message_id(0),length(0),is_group(is_group){}
 };
 class ChatRoom{
 public:
     void init();
+
+    ChatRoom(std::string receiver_, std::string sender_, bool is_group_ = false);
+
 private:
     // 模拟一个聊天框架。
     bool is_group;
     std::string const &receiver;  // 聊天室名称，或者接收方用户名称
     std::string const &sender;
     std::deque<message_body> messagebuf;  //这里是消息池
-    ChatRoom(std::string receiver_, std::string sender_, bool is_group_ = false);//
+    //
 };
 
 

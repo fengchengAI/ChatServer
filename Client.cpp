@@ -10,17 +10,17 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <iostream>
-#include <signal.h>
+#include <csignal>
 #include <sys/wait.h>
 #include <cstring>
 #include <cerrno>
 #include <sys/epoll.h>
+
 #include "Client.h"
 #include "utils.h"
 #include "config.h"
-using ::Client;
 
-void ::Client::do_recv(std::string name, char const *data, u_int32_t length, TYPE type)
+void Client::do_recv(std::string name, char const *data, u_int32_t length, TYPE type)
 {
     if (type == TYPE::TEXT)
     {
@@ -53,7 +53,7 @@ bool Client::init()
     sockaddr_in service_addr;
     service_addr.sin_family = AF_INET;
     service_addr.sin_port = htons(MYPORT);
-    service_addr.sin_addr.s_addr =inet_addr(ip.c_str());
+    service_addr.sin_addr.s_addr = inet_addr(ip.c_str());
     extern int errno;
     client_fd = socket(AF_INET,SOCK_STREAM,0);
     if (!client_fd)
@@ -83,15 +83,11 @@ bool Client::init()
     ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev);
 
-    char *shakedata = (char *)calloc(26, sizeof (char) );
-    encode(0,5,0,0);
-    // 这里是第一次连接，会使用固定的头信息。然后加上自己的用户名发送给服务器。
-    // 服务器收到这个消息后，就会将对应客户端的fd和这个名字进行绑定（map）
+    message_body message;
+    message.sender_ = username;
+    message.type = TYPE::CONNECT;
+    push(message);
 
-    memcpy(shakedata, messagehead_w,6);
-    memcpy(shakedata+6,username.c_str(),username.length());
-
-    push(std::make_pair(shakedata, 26));
     return true;
 
 }
@@ -101,75 +97,17 @@ void Client::ui()
 {
     // 这里模拟的是UI发送窗口。
     home();
-    bool flag;
-    while (flag)
-    {
 
-        std::cout<<"输入数据类型\n :eg TEXT 1;"<<std::endl;
-        switch (fgetc(stdin)-48)
-        {
-            case TYPE::TEXT:
-            {
-
-                std::string sentname = getName() ;
-                std::cout<<"请输入不超过200字符的文本："<<std::endl;
-                std::pair<const char *, size_t> message_body = getData();
-                encode(12, 1, TYPE::TEXT, message_body.second);
-                char * message = generateData(sentname, message_body.first, message_body.second, -1);
-                push(std::make_pair(message, 46+message_body.second));
-                std::unique_lock<std::mutex> eplock(etmutex);
-                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
-                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-                eplock.unlock();
-                break;
-            }
-            case TYPE::FRIEND:
-            {
-                std::cout<<"请输入好友用户名"<<std::endl;
-                string name = getName() ;
-                int id = getRandValue();
-                command[id] = std::pair<TYPE, string>{TYPE::FRIEND, name};
-                encode(12, 1, TYPE::FRIEND, 4);
-                char * message = generateData(name, nullptr, 4, id);
-                push(std::make_pair(message, 50));
-                std::unique_lock<std::mutex> eplock(etmutex);
-                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
-                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-                eplock.unlock();
-                break;
-            }
-            case TYPE::ROOM:
-            {
-                std::cout<<"请输入群员信息，成员之间以‘，’分割，以换行结束"<<std::endl;
-                string name = getName();
-                int id = getRandValue();
-                command[id] = std::pair<TYPE, string>{TYPE::ROOM, name};
-                encode(12, 1, TYPE::ROOM, name.length());
-                char * message = generateData(string(), name.c_str(), name.length()+4, id);
-                push(std::make_pair(message, 50+name.length()));
-                std::unique_lock<std::mutex> eplock(etmutex);
-                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
-                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-                eplock.unlock();
-                break;
-            }
-            default:
-            {
-                std::cout<<"数据类型错误"<<std::endl;
-                break;
-            }
-        }
-    }
 }
 
-std::pair<char const*, u_int32_t> Client::pop() {
+message_body Client::pop() {
     std::lock_guard<std::mutex> lck(lock);
-    std::pair<char const *, u_int32_t> temp = messagebuf.front();
+    message_body temp = messagebuf.front();
     messagebuf.pop_front();
     return temp;
 }
 
-void Client::push(std::pair<char const *, u_int32_t> data) {
+void Client::push(message_body data) {
     std::lock_guard<std::mutex> lck(lock);
     messagebuf.push_back(data);
 }
@@ -212,9 +150,10 @@ void Client::run()
             {
                 while (!messagebuf.empty())
                 {
-                    std::pair<char const*, u_int32_t> data = pop();
-                    writedata(events[i].data.fd, data.first, data.second);
-                    free(const_cast<char *>(data.first));
+                    message_body data = pop();
+                    std::pair<char *, size_t> encodemessage = encode1(data);
+                    writedata(events[i].data.fd, encodemessage.first, encodemessage.second);
+                    free(const_cast<char *>(encodemessage.first));
                 }
                 std::unique_lock<std::mutex> eplock(etmutex);
                 ev.events =  EPOLLIN | EPOLLET ; //取消epoll的write监视，这里是必须的，具体为什么可以自己尝试修改，看看什么问题？ （程序会一直可写，所有这里是死循环）
@@ -246,6 +185,7 @@ void Client::run()
                     }
                     else  // 正常聊天消息
                     {
+                        char sendname[20];
                         readdata(client_fd, sendname, 20);
                         char myname[20];
                         readdata(client_fd, myname, 20);
@@ -262,22 +202,6 @@ void Client::run()
     }
 }
 
-char *Client::generateData(string name, const char *buf, size_t length, int message_id) {
-    char *ptr = (char *) calloc(46+length, 1);
-    memcpy(ptr, messagehead_w, 6);
-    memcpy(ptr+6, username.c_str(), 20);
-    memcpy(ptr+26, name.c_str(), 20);
-    if (message_id==-1)
-        memcpy(ptr+46, buf, length);
-    else{
-        ptr[46] = message_id & 0xff000000 ;
-        ptr[47] = message_id & 0x00ff0000 ;
-        ptr[48] = message_id & 0x0000ff00 ;
-        ptr[49] = message_id & 0x000000ff ;
-        memcpy(ptr+50, buf, length-4);
-    }
-    return ptr;
-}
 
 
 
@@ -299,10 +223,10 @@ void Client::home() {
     }
     string data;
 
-    std::cin>>data;
-    if ()
+    while (1)
     {
-        /* code */
+        getline(cin,data);
+        parse(data);
     }
 }
 
@@ -327,44 +251,165 @@ void Client::showfriend(){
 void Client::changechat(std::string name) {
     // 进入与name聊天的对话框中
     // name 是一个聊天室名称（群聊），或者一个用户名（1对1）
-    std::vector<std::string> room = account.getfriends();
-    if (std::find(room.begin(), room.end(), name)!= room.end())
+    std::vector<std::string> friends = account.getfriends();
+    std::vector<std::string> room = account.getrooms();
+    bool is_group;
+    if (std::find(friends.begin(), friends.end(), name)!= friends.end())
     {
-        if ()
-        {
-            /* code */
-        }
-        
+        is_group = false;
+    }else if (std::find(room.begin(), room.end(), name)!= room.end()){
+        is_group = true;
+    }else{
+        std::cout<<"非法接收方"<<std::endl;
+        return;
     }
-    
+    if (!activate_room.count(name)){
+        ChatRoom *newroom = new ChatRoom(username, name, is_group);
+        activate_room[name] = newroom;
+    }
+    chatwith(name, is_group);
+
 }
 std::string Client::makeFriend(){
     string data;
     std::cout<<"请输入添加好友的名称"<<std::endl;
     std::cin>>data;
+    message_body m;
+    m.message_id = getRandValue();
+    m.type = TYPE::FRIEND;
+    m.sender_ = username;
+    push(m);
     return data;
 }
 std::string Client::makeRoom(){
-
+    string data;
+    std::cout<<"请输入邀请的群聊成员名字之间以，间隔"<<std::endl;
+    std::cin>>data;
+    message_body m;
+    m.message_id = getRandValue();
+    m.type = TYPE::ROOM;
+    m.sender_ = username;
+    m.data = data.c_str();
+    m.length = data.length();
+    push(m);
+    return data;
 }
+
+
+bool Client::response(int messageid) {
+
+    //std::cout<<data<<endl<<"  "<<"是否接受该请求，确认请按1，拒绝请按0"<<std::endl;
+    string s;
+    while(1){
+        std::cin>>s;
+        if (s.size()==1&&s.front()=='1')
+            return 1;
+        else if(s.size()==1&&s.front()=='0')
+            return -1;
+    }
+
+
+    /*
+     *
+     */
+}
+
 bool Client::parse(std::string command, std::string filter) {
     // 对command的解析，其中command的命令限制在filter开头。
     // show contact, do 0, d0 1, deal, select;
-    if (filter.find(command)!=std::string::npos)
-    {
+    //if (filter.find(command)!=std::string::npos)
+    //{
         if (command == "show contact")
         {
             showfriend();
         }else if(command == "do 0"){
+            makeFriend();
             //添加好友
         }else if(command == "do 1"){
+            makeRoom();
             //添加群聊
         }else if(command.find("deal")!=std::string::npos){
             // 对这个请求应答
+            int id;
+            // 解析id
+            response(id);
         }else if(command.find("select")!=std::string::npos){
             string name = string(command.find("select")+7+command.begin(), command.end());
             changechat(name);
-        }  
-    }else 
-        return 0;
+        }
+        return 1;
+
+    //}else
+    //    return 0;
+}
+
+std::pair<char *, size_t> Client::encode1(message_body body) {
+    messagehead_w[0] = body.type+ (VERSION<<4);
+    messagehead_w[1] = 0;
+    messagehead_w[2] = body.length & 0xff000000 ;
+    messagehead_w[3] = body.length & 0x00ff0000 ;
+    messagehead_w[4] = body.length & 0x0000ff00 ;
+    messagehead_w[5] = body.length & 0x000000ff ;
+    size_t length = 26+body.length;
+    if (!body.receiver_.empty()) length+=20;
+    if (!body.message_id) length+=4;
+    char *data = (char *)calloc(length, sizeof (char));
+
+
+    memcpy(data, messagehead_w,6);
+    memcpy(data+6,body.sender_.c_str(),username.length());
+    if (!body.receiver_.empty())
+        memcpy(data+26,body.receiver_.c_str(),username.length());
+    if (!body.message_id)
+    {
+        data[length-4] = body.message_id & 0xff000000;
+        data[length-3] = body.message_id & 0x00ff0000;
+        data[length-2] = body.message_id & 0x0000ff00;
+        data[length-1] = body.message_id & 0x000000ff;
+    }
+    return {data, length};
+}
+
+void Client::chatwith(std::string name, bool isgroup) {
+    // bool flag;
+    while (1)
+    {
+
+        std::cout<<"输入数据类型\n :eg \n    TEXT 1\n"
+                   "    PICTURE 2\n"
+                   "    SOUND 3\n"
+                   "    VIDEO 4"<<std::endl;
+        string data;
+        while (std::cin>>data)
+        {
+            if (data == "exit"||data == "EXIT"){
+                return;
+            }
+            else if( data == "TEXT"||data =="1")
+            {
+
+                std::cout<<"请输入不超过200字符的文本："<<std::endl;
+                std::string textmessage;
+                std::cin>>textmessage;
+                message_body body;
+                body.length = textmessage.length();
+                body.type = TYPE::TEXT;
+                body.sender_ = username;
+                body.receiver_ = name;
+                body.is_group = isgroup;
+
+                push(body);
+                std::unique_lock<std::mutex> eplock(etmutex);
+                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+                eplock.unlock();
+                break;
+            }
+            else
+            {
+                std::cout<<"数据类型错误"<<std::endl;
+                break;
+            }
+        }
+    }
 }

@@ -10,8 +10,10 @@
 #include <set>
 #include <map>
 #include <memory>
-#include "config.h"
 #include <vector>
+
+#include "config.h"
+
 #define NUMS 100
 class Server
 {

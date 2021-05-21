@@ -11,6 +11,7 @@
 
 #include "config.h"
 #include "Account.h"
+#include "ChatRoom.h"
 
 class Client {
 private:
@@ -22,11 +23,10 @@ private:
     int client_fd;
     char messagehead_r[6];
     char messagehead_w[6];  // 写数据用到的
-    char * databuf_r;
-    const char * databuf_w ;  // 写数据用到。
+
     std::deque<std::pair<int, string> >  responsebuf;
-    std::deque<std::pair<char const * , u_int32_t>> messagebuf;  //这里是消息池，每个要方法的信息都会暂存在这里
-    std::map<int, std::pair<TYPE, string> > command; //第一个int表示命令的id，TYPE表示命令类型，
+    std::deque<message_body> messagebuf;  //这里是消息池，每个要发送的信息都会暂存在这里
+    std::map<int, message_body > command; //第一个int表示命令的id，
     std::unordered_map<std::string, ChatRoom*> activate_room;
 
 
@@ -41,19 +41,20 @@ public:
     void changechat(std::string);
     void home();
     bool parse(std::string command, std::string filter = string());
-    std::pair<const char *, size_t> getData();
-    string getName(bool isRoom = false);
-
+    bool response(int messageid);
     Client(std::string service_ip, Account account);
     void ui();
     void showfriend();
-    char * generateData(string name, const char *buf, size_t length,  int message_id);
     void encode(u_int8_t version_,u_int8_t namelength, u_int8_t type, u_int32_t datalengtyh);
     void decode(u_int8_t &version_,u_int8_t &namelength, u_int8_t &type, u_int32_t &datalengtyh);
+
+    std::pair<char *, size_t> encode1(message_body);
+    void decode1(u_int8_t &version_,u_int8_t &namelength, u_int8_t &type, u_int32_t &datalengtyh);
+
     void do_recv(std::string name, char const *data, u_int32_t length, TYPE type);
     void do_sent(std::string name, char const * data, u_int32_t length, TYPE type);
-    void push(std::pair<char const *, u_int32_t> data);
-    std::pair<char const *, u_int32_t> pop();
+    void push(message_body data);
+    message_body pop();
     bool init();
     void run();
 

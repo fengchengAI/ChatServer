@@ -22,6 +22,7 @@ enum TYPE
     PICTURE,
     SOUND,
     VIDEO,
+    CONNECT, // 客户端连接
     FRIEND,  //对应添加好友请求
     ROOM,   //对应群聊请求
     YES,    // 对前两个请求的响应

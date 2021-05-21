@@ -17,7 +17,6 @@
  *
  *
 */
-#include <mysqlx/xdevapi.h>
 #include <string>
 #include <unordered_map>
 
@@ -38,8 +37,10 @@ private:
 
 public:
 
-    bool response(std::string data);
+    //bool response(std::string data);
     void init();
+    bool makeFriend(string name);
+    bool makeRoom(string data);
     bool Sign_up(std::string name_, std::string password_, bool gender_);
     bool Sign_in(std::string name_, std::string password_);
     std::string getName();

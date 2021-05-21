@@ -21,7 +21,7 @@ private:;
     std::string host;
     std::string name;
     int port;
-    std::string database;  //Schema myDb= mySession.getSchema("test");
+    std::string database;
     std::string password;
     Session *sess = nullptr;
 public:
