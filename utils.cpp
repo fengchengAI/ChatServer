@@ -43,8 +43,16 @@ std::string chartostring(char *s, size_t length)
     }
     return std::string(s,j);
 }
+std::string chartostring(u_char *s, size_t length)
+{   char *s1 =  (char *)(s);
+    int j;
+    for (j = 0; j < length && static_cast<int>(s1[j])!=0; ++j )
+    {
+    }
+    return std::string(s1,j);
+}
 
-bool readdata(int fd, char *buf, int length)
+bool readdata(int fd, u_char *buf, int length)
 {
     int n;
     while ((n = recv(fd, buf,length >= 4096 ? 4096 : length,0)) != 0 && (length > 0))
@@ -71,7 +79,7 @@ bool readdata(int fd, char *buf, int length)
     return true;
 }
 
-bool writedata(int fd, const char *buf, int length)
+bool writedata(int fd, const u_char *buf, int length)
 {
     int n;
     while ((n = send(fd, buf,length>=4096?4096:length,0))!=0 &&(length>0))

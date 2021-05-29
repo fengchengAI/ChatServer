@@ -8,15 +8,6 @@
 #include <string>
 #include <unordered_map>
 #include <functional>
-/*
- * show list;
- * select user;
- * "open a new chat group windows"
- *  sent message
- *  另一个进程一直在读数据。
- *
- *
-*/
 #include <string>
 #include <unordered_map>
 
@@ -33,7 +24,6 @@ private:
     std::vector<std::string> friends;
     std::vector<std::string> rooms;
     std::map<std::string, std::vector<std::string>> roomsmembers;
-    std::deque<Announcement> notice;
 
 public:
 
@@ -41,16 +31,16 @@ public:
     void init();
     bool makeFriend(string name);
     bool makeRoom(string data);
+    std::string getName();
     bool Sign_up(std::string name_, std::string password_, bool gender_);
     bool Sign_in(std::string name_, std::string password_);
-    std::string getName();
     std::vector<std::string> const & getfriends() const;
     std::vector<std::string> const & getrooms() const;
-    std::deque<Announcement> const & getnotice() const;
-    void addactivate_room(std::string name);
+    std::vector<std::string>const & getroomsmembers(std::string room)const;
+
+    std::unordered_map<std::string, std::pair<TYPE, int>> getnotice();
     explicit Account(Sql* s_ptr):sql_ptr(s_ptr){};
     ~Account();
-
 
 };
 

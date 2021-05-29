@@ -15,40 +15,76 @@
 #include <cstring>
 #include <cerrno>
 #include <sys/epoll.h>
-
+#include <sys/stat.h>
 #include "Client.h"
 #include "utils.h"
 #include "config.h"
 
-void Client::do_recv(std::string name, char const *data, u_int32_t length, TYPE type)
+void Client::do_sent(message_body body) {
+    if (body.type == TYPE::TEXT){
+        activate_room[body.receiver_]->insert(show(body));
+    }else if (body.type == TYPE::FRIEND){
+
+    }else if(body.type == TYPE::ROOM){
+
+    } else{
+
+    }
+}
+
+void Client::do_recv(message_body const & body)
 {
-    if (type == TYPE::TEXT)
-    {
-        std::cout.write(data,length);
-        std::fflush(0);
-        std::cout<<"reve from "<<name<< " "<<length<<"字节数据"<<std::endl;
+    if (body.type == TYPE::TEXT){
 
-    }else if (type == TYPE::FRIEND)
-    {
-        int message_id = get4BitInt(data);
-        responsebuf.push_back({message_id, string (data,length-4)});
-    }else if(type == TYPE::ROOM){
+        if (nowchatwith==body.sender_){
+            string showdata = show(body);
+            cout<<showdata<<endl;
+            activate_room[body.sender_]->insert(showdata);
 
-    } else
-    {
+        }else{
+            messagebuf_recv[body.sender_].push_back(body);
+            if(notice.count(body.sender_)&&notice[body.sender_]){
+                notice[body.sender_]->id += 1;
+                notice[body.sender_]->type |= TYPE::TEXT;
+            } else{
+                notice[body.sender_] = new  Announcement(TYPE::TEXT,"", 0,1);
+            }
+        }
+
+    }else if (body.type == TYPE::FRIEND){
+        messagebuf_recv[body.sender_].push_back(body);
+        notice[body.sender_] = new  Announcement(TYPE::FRIEND,string((char *)body.data, body.length), body.message_id, 0);
+
+    }else if(body.type == TYPE::ROOM){
+        messagebuf_recv[body.sender_].push_back(body);
+        if(notice.count(body.sender_)&&notice[body.sender_]){
+            notice[body.sender_]->type |= TYPE::ROOM;
+            notice[body.sender_]->id = body.message_id;
+            notice[body.sender_]->data = string((char *)body.data, body.length);
+        } else{
+            notice[body.sender_] = new  Announcement(TYPE::ROOM,string((char *)body.data, body.length), body.message_id, 0);
+        }
+
+    } else{
 
     }
 
-    delete data;
 }
-void Client::do_sent(std::string name, char const * data, u_int32_t length, TYPE type)
-{
 
-}
 
 
 bool Client::init()
 {
+    rootpath = string(get_current_dir_name());
+    rootpath.append("/chatlog");
+    if (0 != access(rootpath.c_str(), 0))
+    {
+        int isCreate = mkdir(rootpath.c_str(), S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRWXO);
+        if( !isCreate )
+            cout<<"create path:"<<rootpath<<endl;
+        else
+            cerr<<"create path failed!"<<endl;
+    }
 
     sockaddr_in service_addr;
     service_addr.sin_family = AF_INET;
@@ -86,6 +122,8 @@ bool Client::init()
     message_body message;
     message.sender_ = username;
     message.type = TYPE::CONNECT;
+    message.head = VERSION;
+
     push(message);
 
     return true;
@@ -96,6 +134,8 @@ bool Client::init()
 void Client::ui()
 {
     // 这里模拟的是UI发送窗口。
+    system("clear");
+    std::cout<<"welcome back, "<<username<<endl;
     home();
 
 }
@@ -112,28 +152,8 @@ void Client::push(message_body data) {
     messagebuf.push_back(data);
 }
 
-// 4位开头，4位数据类型，8位接受用户数量，32位数据大小，（最大4g文件）
-
-void Client::encode(u_int8_t version, u_int8_t type, u_int8_t options, u_int32_t datalength)
-{
-    messagehead_w[0] = type + (version<<4);
-    messagehead_w[1] = options;
-    messagehead_w[2] = datalength & 0xff000000 ;
-    messagehead_w[3] = datalength & 0x00ff0000 ;
-    messagehead_w[4] = datalength & 0x0000ff00 ;
-    messagehead_w[5] = datalength & 0x000000ff ;
-}
-void Client::decode(u_int8_t &version, u_int8_t &type, u_int8_t &options, u_int32_t &datalength) {
-
-    datalength = static_cast<u_int32_t >(messagehead_r[5] + (messagehead_r[4]<<8) + (messagehead_r[3]<<16) + (messagehead_r[2]<<24));
-    options  = static_cast<u_int8_t >(messagehead_r[1]);
-    type = static_cast<u_int8_t>(messagehead_r[0] & 0x0f);
-    version = static_cast<u_int8_t >(messagehead_r[0] & 0xf0);
-}
-
-Client::Client(std::string ip, Account account_):ip(ip),account(account_)
-{
-
+Client::Client(std::string ip, Account account_):ip(ip), account(account_){
+    username = account_.getName();
 }
 
 void Client::run()
@@ -143,7 +163,6 @@ void Client::run()
 
         int nfds = epoll_wait(epoll_fd, events, 1 ,-1);
 
-
         for (int i = 0; i < nfds; ++i)
         {
             if(events[i].data.fd == client_fd && events[i].events& EPOLLOUT)
@@ -151,9 +170,11 @@ void Client::run()
                 while (!messagebuf.empty())
                 {
                     message_body data = pop();
-                    std::pair<char *, size_t> encodemessage = encode1(data);
+                    std::pair<u_char *, size_t> encodemessage = data.encode();
                     writedata(events[i].data.fd, encodemessage.first, encodemessage.second);
-                    free(const_cast<char *>(encodemessage.first));
+                    cout<<"发送一条消息"<<endl;
+                    do_sent(data);
+                    free(encodemessage.first);
                 }
                 std::unique_lock<std::mutex> eplock(etmutex);
                 ev.events =  EPOLLIN | EPOLLET ; //取消epoll的write监视，这里是必须的，具体为什么可以自己尝试修改，看看什么问题？ （程序会一直可写，所有这里是死循环）
@@ -164,37 +185,41 @@ void Client::run()
             if(events[i].data.fd == client_fd && events[i].events& EPOLLIN)
             {
 
-                u_int8_t type;
-                u_int8_t version;
-                u_int8_t users;
-                u_int32_t datalength;
-
                 int n; // 这里很重要只要读取到头消息，就一定要读取完整，阻塞读取直到读完一个完整的数据。即在协议中指定的size
                 while ((n = read(events[i].data.fd, messagehead_r, 6))>0)
                 {
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
-                    decode(version,type,users,datalength);
-                    if (version==0 && type == 6 && users == 0&& datalength ==0)  // 第一次连接
+                    message_body body;
+                    body.decode(messagehead_r);
+                    if (body.head==0 && body.type == CONNECT && body.length ==0)  // 第一次连接
                     {
                         std::cout<<"already connected to service "<<std::endl;
                     }
-                    else if (VERSION!=version)  // 不是协议消息
+                    else if (VERSION!=body.head)  // 不是协议消息
                     {
                         cerr<<"Protocol Mismatch";
                         break;
                     }
                     else  // 正常聊天消息
                     {
-                        char sendname[20];
+                        u_char sendname[20];
                         readdata(client_fd, sendname, 20);
-                        char myname[20];
+                        u_char myname[20];
                         readdata(client_fd, myname, 20);
-                        int flag = strncmp(myname,username.c_str(),username.length());
+                        u_char *readdatabuf = (u_char *)calloc(body.length, 1);
+                        readdata(client_fd, readdatabuf, body.length);
+
+                        body.sender_ = std::string ((char *)sendname);
+                        body.receiver_ = std::string ((char *)myname);
+                        body.data = readdatabuf;
+                        int flag = strncmp((char *)myname, username.c_str(), username.length());
                         if (flag)
                         {
                             cerr<<"read error, data not my";
                             continue;
-                        }    
+                        } else{
+                            do_recv(body);
+                        }
                     }    
                 }    
             }
@@ -202,29 +227,37 @@ void Client::run()
     }
 }
 
-
-
-
 void Client::home() {
     // 返回聊天主页面
     // 此时可以添加好友，建立群消息，也可以应答命令。
     // 可以选择聊天对象。
-    // show contact, do 0, d0 1, deal 2, select li;
-    for (auto n: account.getnotice())
+
+    for (auto m: notice)
     {
-        if (n.type == FRIEND )
+        if (!m.second) continue;
+        if (m.second->type & FRIEND )
         {
-            std::cout<<n.sender_<<"请求添加好友"<<std::endl;
-        }else if(n.type == ROOM){
-            std::cout<<n.sender_<<"请求加入群聊："<<n.data<<std::endl;
-        }else {
-            std::cout<<n.sender_<<"发送"<<n.nums<<"条消息"<<std::endl;
+            std::cout<<m.first<<"请求添加好友"<<std::endl;
+        }if(m.second->type & ROOM){
+            std::cout<<m.first<<"请求加入群聊："<<m.second->data<<std::endl;
+        }if(m.second->type & TEXT) {
+            std::cout<<m.first<<"发送"<<m.second->id<<"条消息"<<std::endl;
         }
     }
     string data;
 
     while (1)
     {
+        cout<<" -------------------------------------------\n";
+        cout<<"|                                           |\n";
+        cout<<"|          请选择你要需要的功能：               |\n";
+        cout<<"|              show contact:查看联系人        |\n";
+        cout<<"|              do 0:发起单独聊天               |\n";
+        cout<<"|              do 1:发起群聊                  |\n";
+        cout<<"|              deal n:回应n号命令              |\n";
+        cout<<"|              select x:和x聊天               |\n";
+        cout<<"|              exit:退出                      |\n";
+        cout<<" ------------------------------------------- \n\n";
         getline(cin,data);
         parse(data);
     }
@@ -245,7 +278,6 @@ void Client::showfriend(){
     {
         std::cout<<rooms.at(i)<<std::endl;
     }
-
 }
 
 void Client::changechat(std::string name) {
@@ -264,9 +296,10 @@ void Client::changechat(std::string name) {
         return;
     }
     if (!activate_room.count(name)){
-        ChatRoom *newroom = new ChatRoom(username, name, is_group);
+        ChatRoom *newroom = new ChatRoom(name, username, is_group);
         activate_room[name] = newroom;
     }
+    nowchatwith = name;
     chatwith(name, is_group);
 
 }
@@ -289,7 +322,7 @@ std::string Client::makeRoom(){
     m.message_id = getRandValue();
     m.type = TYPE::ROOM;
     m.sender_ = username;
-    m.data = data.c_str();
+    m.data = (u_char*)data.c_str();
     m.length = data.length();
     push(m);
     return data;
@@ -307,11 +340,7 @@ bool Client::response(int messageid) {
         else if(s.size()==1&&s.front()=='0')
             return -1;
     }
-
-
-    /*
-     *
-     */
+    //TODO
 }
 
 bool Client::parse(std::string command, std::string filter) {
@@ -319,7 +348,10 @@ bool Client::parse(std::string command, std::string filter) {
     // show contact, do 0, d0 1, deal, select;
     //if (filter.find(command)!=std::string::npos)
     //{
-        if (command == "show contact")
+        if (command == "exit")
+        {
+            destory();
+        }else if (command == "show contact")
         {
             showfriend();
         }else if(command == "do 0"){
@@ -343,73 +375,91 @@ bool Client::parse(std::string command, std::string filter) {
     //    return 0;
 }
 
-std::pair<char *, size_t> Client::encode1(message_body body) {
-    messagehead_w[0] = body.type+ (VERSION<<4);
-    messagehead_w[1] = 0;
-    messagehead_w[2] = body.length & 0xff000000 ;
-    messagehead_w[3] = body.length & 0x00ff0000 ;
-    messagehead_w[4] = body.length & 0x0000ff00 ;
-    messagehead_w[5] = body.length & 0x000000ff ;
-    size_t length = 26+body.length;
-    if (!body.receiver_.empty()) length+=20;
-    if (!body.message_id) length+=4;
-    char *data = (char *)calloc(length, sizeof (char));
 
-
-    memcpy(data, messagehead_w,6);
-    memcpy(data+6,body.sender_.c_str(),username.length());
-    if (!body.receiver_.empty())
-        memcpy(data+26,body.receiver_.c_str(),username.length());
-    if (!body.message_id)
-    {
-        data[length-4] = body.message_id & 0xff000000;
-        data[length-3] = body.message_id & 0x00ff0000;
-        data[length-2] = body.message_id & 0x0000ff00;
-        data[length-1] = body.message_id & 0x000000ff;
-    }
-    return {data, length};
-}
 
 void Client::chatwith(std::string name, bool isgroup) {
-    // bool flag;
-    while (1)
+    system("clear");
+    cout<<" 聊天室:"<<name<<endl;
+    cout<<" -------------------------------------------\n";
+    cout<<"|              (tips)                       |\n";
+    cout<<"|          发送的消息类型：                    |\n";
+    cout<<"|              1:TEXT(默认)                  |\n";
+    cout<<"|              2:PICTURE                    |\n";
+    cout<<"|              3:SOUND                      |\n";
+    cout<<"|              4:VIDEO                      |\n";
+    cout<<"|              5:EXIT                       |\n";
+    cout<<" ------------------------------------------- \n\n";
+    activate_room[name]->init();
+    loadrecvbuf();
+
+    string data;
+
+    //std::cout<<"请输入不超过200字符的文本："<<std::endl;
+    while (getline(cin,data))
     {
+        if (data == "5"||data == "EXIT"){
+            nowchatwith.clear();
+            return;
+        }else if(data == "2"||data == "PICTURE"){
+            //break;
+        }else if(data == "3"||data == "SOUND"){
+            //return;
+        }else if(data == "4"||data == "VIDEO"){
+            //return;
+        }else {
 
-        std::cout<<"输入数据类型\n :eg \n    TEXT 1\n"
-                   "    PICTURE 2\n"
-                   "    SOUND 3\n"
-                   "    VIDEO 4"<<std::endl;
-        string data;
-        while (std::cin>>data)
-        {
-            if (data == "exit"||data == "EXIT"){
-                return;
-            }
-            else if( data == "TEXT"||data =="1")
-            {
+            message_body body;
+            u_char *bodydata = (u_char *) calloc(data.length()+1,1);
+            memcpy(bodydata, data.c_str(), data.length()+1);
 
-                std::cout<<"请输入不超过200字符的文本："<<std::endl;
-                std::string textmessage;
-                std::cin>>textmessage;
-                message_body body;
-                body.length = textmessage.length();
-                body.type = TYPE::TEXT;
-                body.sender_ = username;
-                body.receiver_ = name;
-                body.is_group = isgroup;
+            body.data = bodydata;
+            body.length = data.length()+1;
 
-                push(body);
-                std::unique_lock<std::mutex> eplock(etmutex);
-                ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
-                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
-                eplock.unlock();
-                break;
-            }
-            else
-            {
-                std::cout<<"数据类型错误"<<std::endl;
-                break;
-            }
+            body.type = TYPE::TEXT;
+            body.sender_ = username;
+            body.receiver_ = name;
+            body.is_group = isgroup;
+
+            push(body);
+            std::unique_lock<std::mutex> eplock(etmutex);
+            ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+            epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_fd, &ev);
+            eplock.unlock();
+        }
+    }
+}
+
+std::string Client::show(const message_body &body) {
+    //print body
+    std::string str = getDateTime();
+    str.append(" ");
+
+    str.append(body.sender_);
+    str.append(" :");
+    if (body.type == TYPE::TEXT)
+        str.append(std::string ((char *)body.data, body.length));
+    str.push_back('\n');
+    return str;
+
+}
+void Client::destory (){
+    // TODO 释放资源，关闭fd，free指针等等嘛
+    cout<<"Bye..................."<<endl;
+    exit(EXIT_SUCCESS);
+}
+
+Client::~Client() {
+    destory();
+}
+
+void Client::loadrecvbuf() {
+    if(messagebuf_recv.count(nowchatwith)){
+        auto deque = messagebuf_recv.at(nowchatwith);
+        while(!deque.empty()){
+            string recvbufbody = show(deque.front());
+            cout<<recvbufbody<<endl;
+            activate_room[nowchatwith]->insert(recvbufbody);
+            deque.pop_front();
         }
     }
 }

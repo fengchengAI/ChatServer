@@ -11,40 +11,39 @@
 #include <map>
 #include <memory>
 #include <vector>
-
+#include "Sql.h"
 #include "config.h"
+#include "ChatRoom.h"
 
 #define NUMS 100
 class Server
 {
 private:
-    struct epoll_event ev, events[NUMS];
+    struct epoll_event events[NUMS];
     int epoll_fd;
     int servicefd;
-
+    Sql *sql_ptr;
     std::set<int> clientfds;   
     std::map<int, std::string> id2name;
     std::map<std::string, int> name2id;
 
-    char messagehead_r[6];
+    u_char messagehead_r[6];
+    u_char messagehead_w[6];  // 写数据用到的
 
-    char messagehead_w[6];  // 写数据用到的
-    char * databuf_r;
-    char * databuf_w ;  // 写数据用到。
-
-    std::map<std::string, std::deque<std::pair< std::shared_ptr<char> , u_int32_t>>> messagebuf;
+    std::map<int, std::deque<message_body>> messagebuf;
 
 
 public:
     Server();
     ~Server();
-    void encode(u_int8_t version_,u_int8_t users, u_int8_t type, u_int32_t datalengtyh);
-    void decode(u_int8_t &version_,u_int8_t &users, u_int8_t &type, u_int32_t &datalengtyh);
-    void do_recv(std::string name, char *data, u_int32_t length, TYPE type);
-    void do_sent(std::string name, char * data, u_int32_t length, TYPE type);
-    std::pair<std::shared_ptr<char>, u_int32_t> pop(int fd);
-    void push(int fd, std::pair<std::shared_ptr<char>, u_int32_t> data);
+
+    void do_recv(std::string name, u_char *data, u_int32_t length, TYPE type);
+    void do_sent(std::string name, u_char * data, u_int32_t length, TYPE type);
+    message_body pop(int);
+    void push(int id, message_body data);
     bool init();
+    void insertOffHistory(message_body);
+    void loadOffHistory(std::string);
     void run();
     void destroy();
 };

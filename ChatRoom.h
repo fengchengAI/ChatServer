@@ -8,30 +8,29 @@
 #include <string>
 #include <deque>
 #include <map>
-
+#include <fstream>
 #include "config.h"
-struct Announcement{
-    std::string sender_;
-    TYPE type;  // 如果是普通消息就使用nums标记数量，如果是请求命令，就使用data数据。
-    std::string data;
-    int nums;
-};
 
 class message_body{
 public:
+        int head;
         std::string receiver_;
         std::string sender_;
         TYPE type;
         int message_id;
-        const char *data;
+        u_char *data;
         size_t length;
         bool is_group;
-        message_body(bool is_group = false):data(nullptr),message_id(0),length(0),is_group(is_group){}
+        message_body(bool is_group = false):data(nullptr),message_id(0),length(0),is_group(is_group),head(VERSION){}
+        std::pair<u_char *, size_t> encode();
+        void decode(u_char *messagehead_r);
 };
 class ChatRoom{
 public:
     void init();
-
+    void insert(std::string str);
+    void load();
+    std::fstream fs;
     ChatRoom(std::string receiver_, std::string sender_, bool is_group_ = false);
 
 private:

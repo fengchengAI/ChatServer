@@ -23,7 +23,7 @@ private:;
     int port;
     std::string database;
     std::string password;
-    Session *sess = nullptr;
+    Session *sess;
 public:
 
     static Sql *GetInstance();
@@ -37,12 +37,9 @@ public:
     {
         return sess;
     }
-    bool commond(std::string  const & com);
 
-
-    Sql()
+    Sql():sess(nullptr)
     {
-
     }
     ~Sql()
     {

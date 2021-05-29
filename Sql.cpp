@@ -1,10 +1,10 @@
 //
 // Created by feng on 2021/3/9.
 //
-
-#include "Sql.h"
 #include <iostream>
 #include <mysqlx/xdevapi.h>
+
+#include "Sql.h"
 
 using mysqlx::Session;
 using std::cout;
@@ -59,10 +59,6 @@ Table Sql::getTable(std::string const &name)
     return sess->getSchema(database).getTable(name);
 }
 
-bool Sql::commond(std::string  const & com)
-{
-
-}
 
 
 

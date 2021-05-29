@@ -16,23 +16,30 @@
 #include <vector>
 #include <cerrno>
 #include <sys/epoll.h>
+#include <memory>
+
+
 #include "Server.h"
 #include "utils.h"
 #include "config.h"
-#include <memory>
+#include "ChatRoom.h"
 using namespace std;
 
+using mysqlx::RowResult;
+using mysqlx::Row;
 
-void Server::do_recv(std::string name, char *data, u_int32_t length, TYPE type)
+void Server::do_recv(std::string name, u_char *data, u_int32_t length, TYPE type)
 {
+    /*
     if (type == TYPE::TEXT)
     {
         std::cout.write(data,length);
         std::fflush(0);
     }
     std::cout<<"reve from "<<name<< " "<<length<<"字节数据"<<std::endl;
+    */
 }
-void Server::do_sent(std::string name, char * data, u_int32_t length, TYPE type)
+void Server::do_sent(std::string name, u_char * data, u_int32_t length, TYPE type)
 {
 
 }
@@ -40,6 +47,9 @@ void Server::do_sent(std::string name, char * data, u_int32_t length, TYPE type)
 
 bool Server::init()
 {
+
+    sql_ptr = Sql::GetInstance();
+    sql_ptr->init("chat","   ","account","101.132.128.237",33060);
 
     sockaddr_in service_addr;
     service_addr.sin_family = AF_INET;
@@ -51,7 +61,10 @@ bool Server::init()
     {
         std::cerr<<"socket 创建失败 :"<<errno <<strerror(errno);
     }
-
+    ///* TODO 服务器需要设置SO_REUSEADDR吗
+    int opt = 1;
+    setsockopt(servicefd, SOL_SOCKET, SO_REUSEADDR, (const void *)&opt, sizeof(opt));
+    //*/w
     if (bind(servicefd, (struct sockaddr *)&service_addr, sizeof service_addr))
     {
         std::cerr<<"bind error :"<<errno <<strerror(errno);
@@ -67,147 +80,112 @@ bool Server::init()
         perror("epoll_create");
         exit(EXIT_FAILURE);
     }
-    /* TODO 服务器需要设置SO_REUSEADDR吗
-    int opt = 1;
-    setsockopt(servicefd, SOL_SOCKET, SO_REUSEADDR, (const void *)&opt, sizeof(opt));
-    */
-    setSockNonBlock(servicefd);
 
+    setSockNonBlock(servicefd);
+    epoll_event ev;
     ev.data.fd = servicefd;
-    ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+    ev.events = EPOLLIN | EPOLLET;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, servicefd, &ev);
 
     return true;
 
 }
 
-std::pair<std::shared_ptr<char>, u_int32_t> Server::pop(int fd) {
-    std::pair<std::shared_ptr<char>, u_int32_t> temp = messagebuf[id2name[fd]].front();
-    messagebuf[id2name[fd]].pop_front();
+message_body Server::pop(int id) {
+    message_body temp = messagebuf[id].front();
+    messagebuf[id].pop_front();
     return temp;
 }
 
-void Server::push(int fd, std::pair<std::shared_ptr<char>, u_int32_t> data) {
-     messagebuf[id2name[fd]].push_back(data);
+void Server::push(int id, message_body data) {
+     messagebuf[id].push_back(data);
 }
 
-void Server::encode(u_int8_t version, u_int8_t type, u_int8_t users, u_int32_t datalength)
+Server::Server():sql_ptr(nullptr)
 {
-    messagehead_w[0] = type + (version<<4);
-    messagehead_w[1] = users;
-    messagehead_w[2] = datalength & 0xff000000 ;
-    messagehead_w[3] = datalength & 0x00ff0000 ;
-    messagehead_w[4] = datalength & 0x0000ff00 ;
-    messagehead_w[5] = datalength & 0x000000ff ;
-}
-void Server::decode(u_int8_t &version, u_int8_t &type, u_int8_t &users, u_int32_t &datalength) {
 
-    datalength = static_cast<u_int32_t >(messagehead_r[5] + (messagehead_r[4]<<8) + (messagehead_r[3]<<16) + (messagehead_r[2]<<24));
-    users  = static_cast<u_int8_t >(messagehead_r[1]);
-    type = static_cast<u_int8_t>(messagehead_r[0] & 0x0f);
-    version = static_cast<u_int8_t >(messagehead_r[0] & 0xf0);
-}
-Server::Server()
-{
 }
 
 void Server::run()
 {
     while (servicefd>0)
     {
+        std::deque<message_body> temp_messagebuf; // 这是临时的，每次epoll_wait循环都会清零
 
-        int nfds = epoll_wait(epoll_fd, events, NUMS ,-1);
+        int nfds = epoll_wait(epoll_fd, events, NUMS, -1);
+        temp_messagebuf.clear();
         for (int i = 0; i < nfds; ++i)
         {
-            if(clientfds.count(events[i].data.fd) && events[i].events& EPOLLOUT)  // 可写
-
+            if(clientfds.count(events[i].data.fd) && events[i].events&EPOLLOUT)  // 可写
             {
-                while (!messagebuf[id2name[events[i].data.fd]].empty())
+                std::cout<<"EPOLLOUT被触发"<<endl;
+                while (!messagebuf[events[i].data.fd].empty())
                 {
-                    std::pair<std::shared_ptr<char>, u_int32_t> data = pop(events[i].data.fd);
-                    // TODO 什么时候free（data.first）
-
-                    char* buf= data.first.get();
-
-                    bzero(buf+ 26,20);
-                    memcpy(buf+26 ,id2name[events[i].data.fd].c_str(),id2name[events[i].data.fd].length());
-                    writedata(events[i].data.fd, buf, data.second);
+                    message_body data = pop(events[i].data.fd);
+                    std::pair<u_char *, size_t> forwarddata = data.encode();
+                    writedata(events[i].data.fd, forwarddata.first, forwarddata.second);
+                    std::cout<<"转发一条小溪"<<endl;
                 }
+                epoll_event ev;
+                ev.data.fd = events[i].data.fd;
                 ev.events =  EPOLLIN | EPOLLET; //取消epoll的write监视
-                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, ev.data.fd, &ev);
+                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
             }
             if(clientfds.count(events[i].data.fd)&& events[i].events & EPOLLIN) //可读
-
             {
 
-                u_int8_t type;
-                u_int8_t version;
-                u_int8_t users;
-                u_int32_t datalength;
-                int n; // 这里很重要只要读取到头消息，就一定要读取完整，阻塞读取直到读完一个完整的数据。即在tou中指定的size
+                int n = 0; // 这里很重要只要读取到头消息，就一定要读取完整，阻塞读取直到读完一个完整的数据。即在头中指定的size
+                bzero(messagehead_r, 6);
                 while ((n = read(events[i].data.fd, messagehead_r, 6))>0)
                 {
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
-                    decode(version,type,users,datalength);
-                    if (version==VERSION && type == CONNECT && users == 0&& datalength ==0)  // 客户端第一次发送消息
-
-                    {
-                        std::cout<<"new client connecting to service "<<std::endl;
-                        char buf[20];
-                        readdata(events[i].data.fd, buf, 20);
-                        id2name[events[i].data.fd] = chartostring(buf,20);
-                        name2id[chartostring(buf,20)] = events[i].data.fd;
-                        char* shakedata = (char *)calloc(46,1);
-                        // 虽然实际上这里只需要6个字节的头文件。但是这里这样做后，就是空间换时间，不用再到write中再调用if判断是不是一个头文件了
-
-                        encode(0, 6, 0,0);
-                        memcpy(shakedata,messagehead_w,6);
-                        memcpy(shakedata+6,buf,20);
-                        push(events[i].data.fd,{std::shared_ptr<char >(shakedata), 6});
-                        ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
-                        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
-                    }
-                    else if (VERSION!=version)  // 不是协议消息
+                    message_body body;
+                    body.decode(messagehead_r);
+                    if (body.head!=VERSION)
                     {
                         cerr<<"Protocol Mismatch";
                         break;
                     }
-                    else  // 正常聊天消息
+                    
+                    if (body.type == CONNECT && body.length ==0)  // 客户端第一次发送消息
                     {
-                        databuf_r = (char *)(malloc(46+datalength));
-                        readdata(events[i].data.fd, databuf_r + 6, 20);
-                        memcpy( databuf_r, messagehead_r, 6);
-                        std::vector<std::string> names(users);
-                        char *namebuf = static_cast<char *>(calloc(users * 20, 1));
-                        for (int j = 0; j < users; ++j) {
-                            names.at(j) = chartostring(namebuf+j*20,20);
-                        }
-                        free(namebuf);
-                        readdata(events[i].data.fd, databuf_r+46, datalength);
-                        std::shared_ptr<char> ptr(databuf_r);
-                        for (std::string str: names)
-                        {
-                            if (name2id.count(str))
-                            {
-                                ev.events = ev.events | EPOLLOUT;
-                                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, name2id[str], &ev);
-                                push(name2id[str],{ ptr, datalength+46});
-                            } else
-                            {
-                                //TODO 离线消息
-                            }
-                        }
+                        std::cout<<"new client connecting to service "<<std::endl;
+                        u_char buf[20];
+                        string sentername = chartostring(buf,20);
+                        readdata(events[i].data.fd, buf, 20);
+                        id2name[events[i].data.fd] = sentername;
+                        name2id[sentername] = events[i].data.fd;
+                        loadOffHistory(sentername);
+
+                    }
+                    else if (body.type == TEXT) // 正常聊天消息
+                    {
+                        u_char receiver_[20];
+                        u_char sender_[20];
+                        u_char *data = (u_char *)calloc(body.length, 1);
+
+                        readdata(events[i].data.fd, sender_, 20);
+                        readdata(events[i].data.fd, receiver_, 20);
+                        readdata(events[i].data.fd, data, body.length);
+
+                        body.data = data;
+                        body.sender_ = string((char *)sender_);
+                        body.receiver_ = string((char *)receiver_);
+
+                        temp_messagebuf.push_back(body);
+                        //debug code
+                        // cout<<"收到"<<body.sender_<<"发送的消息"<<endl;
                     }
                 }
             }
             if (servicefd == events[i].data.fd && events[i].events& EPOLLIN)  // 新的连接,客户端connect
-
             {
                 int conn_sock;
                 sockaddr_in remote;
                 socklen_t remotelen;
                 while ((conn_sock = accept(servicefd, (struct sockaddr *) &remote, &remotelen)) > 0) {
                     setSockNonBlock(conn_sock);
+                    epoll_event ev;
                     ev.data.fd = conn_sock;
                     ev.events = EPOLLIN | EPOLLET;
                     clientfds.insert(conn_sock);
@@ -218,6 +196,31 @@ void Server::run()
                         perror("accept");}
             }
         }
+
+
+        while (!temp_messagebuf.empty())
+        {
+            std::cout<<"收到一条消息"<<endl;
+            if (temp_messagebuf.front().is_group)
+            {
+                // TODO 群聊数据
+                /* code */
+            }else{
+                if (name2id.count(temp_messagebuf.front().receiver_))
+                {
+                    int id = name2id.at(temp_messagebuf.front().receiver_);
+                    push(id, temp_messagebuf.front());
+                    epoll_event ev;
+                    ev.data.fd = id;
+                    ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+                    epoll_ctl(epoll_fd, EPOLL_CTL_MOD, id, &ev);
+                }else{
+                    insertOffHistory(temp_messagebuf.front());
+                }
+            }
+            temp_messagebuf.pop_front();
+        }
+        
     }
 }
 
@@ -234,6 +237,38 @@ Server::~Server()
 {
     destroy();
 }
+
+void Server::insertOffHistory(message_body body) {
+
+    Table table = sql_ptr->getTable("history");
+    table.insert("sender","receiver","type","message_id","messagebody","time")
+            .values(body.sender_, body.receiver_, (u_int8_t)body.type, body.message_id, std::string ((char *)body.data, body.length),getDateTime())
+            .execute();
+
+}
+
+void Server::loadOffHistory(std::string name) {
+    Table table = sql_ptr->getTable("history");
+    RowResult result = table.select("id","sender","receiver","type","message_id","messagebody","time")
+            .where("receiver = :receiver_ ")
+            .bind("receiver_", name)
+            .execute();
+    while (result.count()){
+        Row r = result.fetchOne();
+        message_body body;
+        body.sender_ = r[1].operator string();
+        body.receiver_ = r[2].operator string();
+        body.type = (TYPE)r[3].operator int();
+        body.message_id = r[3].operator int();
+        string s = r[5].operator string();
+        u_char * temp = (u_char*) calloc(s.length(), 1);
+        memcpy(temp, s.c_str(), s.length());
+        body.data = temp;
+        body.length = s.length();
+        push(name2id[name], body);
+    }
+}
+
 
 void handle(int)
 {
@@ -255,7 +290,5 @@ int main()
     service.init();
     service.run();
 }
-
-
 
 

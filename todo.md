@@ -68,3 +68,14 @@ type为消息类型， message_id为消息id，messagebody为消息体，
 | messagebody | varchar(230)     | YES  |     | <null>  |                |
 | time        | datetime         | NO   |     | <null>  |                |
 | status     | tinyint      | NO   |     | <null>  |                |
+
+
+
+`现在的代码`
+
+```c++
+
+```
+
+## TODO
+

@@ -14,15 +14,17 @@
 using mysqlx::RowResult;
 using mysqlx::Row;
 
-std::deque<Announcement> const & Account::getnotice() const{
-    return notice;
-}
+
 std::vector<std::string> const & Account::getfriends() const{
     return friends;
 }
 std::vector<std::string> const & Account::getrooms() const{
     return rooms;
 }
+std::vector<std::string>const & Account::getroomsmembers(std::string room)const{
+    return roomsmembers.at(room);
+}
+
 bool Account::Sign_up(std::string name_, std::string password_,bool gender_)
 {
 
@@ -99,10 +101,6 @@ bool Account::Sign_in(std::string name_, std::string password_)
     return true;
 }
 
-std::string Account::getName()
-{
-    return name;
-}
 
 
 Account::~Account() {
@@ -225,6 +223,10 @@ bool Account::makeRoom(string groupname) {  // 群聊名称
                 .where("id = "+row[1].operator int())
                 .execute();
     }
+}
+
+std::string Account::getName() {
+    return name;
 }
 
 
