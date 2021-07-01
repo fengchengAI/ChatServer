@@ -11,22 +11,14 @@
 
 std::string getDateTime()
 {
-    std::string str;
+    //std::string str;
     time_t now = time(0);
     tm *ltm = localtime(&now);
+    char buffer[80];
     // 输出 tm 结构的各个组成部分
-    str.append(to_string(ltm->tm_year+1900));
-    str.append(1,'-');
-    str.append(to_string(ltm->tm_mon+1));
-    str.append(1,'-');
-    str.append(to_string(ltm->tm_mday));
-    str.append(1,' ');
-    str.append(to_string(ltm->tm_hour));
-    str.append(1,':');
-    str.append(to_string(ltm->tm_min));
-    str.append(1,':');
-    str.append(to_string(ltm->tm_sec));
-    return str;
+
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", ltm);
+    return string (buffer);
 }
 
 void setSockNonBlock(int sock)
@@ -51,11 +43,19 @@ std::string chartostring(char *s, size_t length)
     }
     return std::string(s,j);
 }
+std::string chartostring(u_char *s, size_t length)
+{   char *s1 =  (char *)(s);
+    int j;
+    for (j = 0; j < length && static_cast<int>(s1[j])!=0; ++j )
+    {
+    }
+    return std::string(s1,j);
+}
 
-bool readdata(int fd, char *buf, int length)
+bool readdata(int fd, u_char *buf, int length)
 {
     int n;
-    while ((n = recv(fd, buf,length >= 4096 ? 4096 : length,0)) != 0 && (length > 0))
+    while ((n = read(fd, buf,length >= 4096 ? 4096 : length)) != 0 && (length > 0))
     {
         if (n==-1)
         {
@@ -79,10 +79,10 @@ bool readdata(int fd, char *buf, int length)
     return true;
 }
 
-bool writedata(int fd, const char *buf, int length)
+bool writedata(int fd, const u_char *buf, int length)
 {
     int n;
-    while ((n = send(fd, buf,length>=4096?4096:length,0))!=0 &&(length>0))
+    while ((n = write(fd, buf,length>=4096?4096:length))!=0 &&(length>0))
     {
         if (n==-1)
         {
@@ -103,4 +103,23 @@ bool writedata(int fd, const char *buf, int length)
         length-=n;
         buf+=n;
     }
+}
+
+// [left,right]
+int getRandValue(int left, int right){
+    unsigned seed;  // Random generator seed
+    // Use the time function to get a "seed” value for srand
+    seed = time(0);
+    srand(seed);
+    return  rand() % right + left;
+}
+
+int get4BitInt(char const *buf){
+    return static_cast<u_int32_t >(buf[3] + (buf[2]<<8) + (buf[1]<<16) + (buf[0]<<24));
+}
+
+std::pair<std::string, std::string> getAccountInfo(u_char *s, size_t length){
+    string name;
+    string passwad;
+    return {name, passwad};
 }

@@ -6,39 +6,29 @@
 #define UNIX_NETWORK_ACCOUNT_H
 
 #include <string>
-#include <functional>
-/*
- * show list;
- * select user;
- * "open a new chat group windows"
- *  sent message
- *  另一个进程一直在读数据。
- *
- *
-*/
-#include <mysqlx/xdevapi.h>
+#include <unordered_map>
+#include <vector>
 
-using namespace mysqlx;
-#include "Sql.h"
+#include "ChatRoom.h"
 
-class Sql;
 
-// user  数据库有几个字段，
 class Account {
 private:
     std::string name;
-    std::size_t password;
-    Sql sql;
-    bool gender;
-    //string location;
-    //int number;
-    Table table;
+    
+    std::vector<std::string> friends;
+    std::vector<std::string> rooms;
+    std::map<std::string, std::vector<std::string>> roomsmembers;
+
 public:
-    bool Sign_up(std::string name_, std::string password_,bool gender_);
-    bool Sign_in(std::string name, std::string password_);
-    std::string getName();
-    void getCom();
-    explicit Account(Table table);
+
+    void addFriend(std::string name);
+    void addRoom(std::string name, std::vector<std::string> members);
+
+    std::vector<std::string> const & getfriends() const;
+    std::vector<std::string> const & getrooms() const;
+    std::vector<std::string>const & getroomsmembers(std::string room)const;
+
     ~Account();
 
 };

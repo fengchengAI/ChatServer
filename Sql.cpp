@@ -1,10 +1,10 @@
 //
 // Created by feng on 2021/3/9.
 //
-
-#include "Sql.h"
 #include <iostream>
 #include <mysqlx/xdevapi.h>
+
+#include "Sql.h"
 
 using mysqlx::Session;
 using std::cout;
@@ -15,9 +15,9 @@ using mysqlx::Table;
 using mysqlx::RowResult;
 
 
-Sql & Sql::GetInstance()
+Sql * Sql::GetInstance()
 {
-    static Sql sql;
+    static Sql *sql = new Sql();
     return sql;
 }
 void Sql::init(std::string const &name_, std::string  const &password_, std::string  const & host_, int port_)
@@ -46,30 +46,12 @@ void Sql::changeDatabase(std::string  const & database)
     sess->sql(str).execute();
 }
 
-string Sql::getValue(std::string const & name, std::string const & table)
-{
-    Table employees = sess->getSchema(database).getTable(table);
-    RowResult res = employees.select(name)
-            .where("name e :param").execute();
 
-}
-Table Sql::getTable()
-{
-    return sess->getSchema(database).getTable(tablename);
-}
 Table Sql::getTable(std::string const &name)
 {
-    tablename = name;
     return sess->getSchema(database).getTable(name);
 }
-bool Sql::setValue(std::string  const & name, std::string  const & value, std::string  const & table)
-{
 
-}
-bool Sql::commond(std::string  const & com)
-{
-
-}
 
 
 

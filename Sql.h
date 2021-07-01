@@ -15,36 +15,30 @@ using std::endl;
 using std::string;
 using std::vector;
 using mysqlx::Table;
+
 class Sql {
 private:;
     std::string host;
     std::string name;
     int port;
-    std::string database;  //Schema myDb= mySession.getSchema("test");
+    std::string database;
     std::string password;
-    Session *sess = nullptr;
-    std::string tablename; // Table employees = db.getTable("employee");
+    Session *sess;
 public:
 
-    static Sql &GetInstance();
-    void init(std::string  const & name, std::string  const & password, std::string  const & host = "127.0.0.1", int port = 33060);
-    void init(std::string  const & name, std::string  const & password, std::string  const & database_, std::string  const & host = "127.0.0.1", int port = 33060);
+    static Sql *GetInstance();
+    void init(std::string const & name, std::string  const & password, std::string const & host = "101.132.128.237", int port = 33060);
+    void init(std::string const & name, std::string  const & password, std::string const & database_, std::string  const & host = "101.132.128.237", int port = 33060);
     void changeDatabase(std::string  const & database);
-    std::string getValue(std::string  const & name, std::string  const & table);
-    Table getTable();
-    Table getTable(std::string  const & name);
+    Table getTable(std::string const & name);
 
     Session *getSessionPtr()
     {
         return sess;
     }
-    bool setValue(std::string  const & name, std::string  const & value, std::string  const & table);
-    bool commond(std::string  const & com);
 
-
-    Sql()
+    Sql():sess(nullptr)
     {
-
     }
     ~Sql()
     {
