@@ -17,9 +17,9 @@ void setSockNonBlock(int sock);
 std::string chartostring(char *s, size_t length);
 bool readdata(int fd, u_char *buf, int length);
 bool writedata(int fd, const u_char *buf, int length);
-int getRandValue(int left = 1, int right = UINT_MAX);
+int getRandValue(int left = 0, int right = 255);
 int get4BitInt(char const *);
 std::string chartostring(u_char *s, size_t length);
 std::pair<std::string, std::string> getAccountInfo(u_char *s, size_t length);
-
+size_t get_aes_encrypt_length(size_t in);
 #endif //UNIX_NETWORK_UTILS_H

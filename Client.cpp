@@ -22,11 +22,30 @@
 #include <thread>
 #include <sys/stat.h>
 
-
 #include "Client.h"
 #include "utils.h"
 #include "config.h"
+AES_KEY decrypt_key;
+AES_KEY encrypt_key;
 
+void ShowCerts (SSL* ssl)
+{
+    X509 *cert;
+    char *line;
+
+    cert=SSL_get_peer_certificate(ssl);
+    if(cert !=NULL){
+        printf("数字证书信息：\n");
+        line=X509_NAME_oneline(X509_get_subject_name(cert),0,0);
+        printf("证书：%s\n",line);
+        free(line);
+        line=X509_NAME_oneline(X509_get_issuer_name(cert),0,0);
+        printf("颁发者：%s\n",line);
+        free(line);
+        X509_free(cert);
+    }else
+        printf("无证书信息！\n");
+}
 
 
 //消息存入本地缓存区
@@ -128,6 +147,9 @@ bool Client::init()
     service_addr.sin_addr.s_addr = inet_addr(ip.c_str());
     extern int errno;
     client_fd = socket(AF_INET,SOCK_STREAM,0);
+    int opt = 1;
+    setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&opt, sizeof(opt));
+
     if (!client_fd)
     {
         std::cerr<<"socket 创建失败";
@@ -146,11 +168,13 @@ bool Client::init()
         perror("epoll_create");
         exit(EXIT_FAILURE);
     }
-    //实现端口复用
-    int opt = 1;
-    setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&opt, sizeof(opt));
-    setSockNonBlock(client_fd);
 
+    init_ssl();
+    if (!handshake(client_fd)) return false;
+
+    //实现端口复用
+
+    setSockNonBlock(client_fd);
     ev.data.fd = client_fd;
     ev.events = EPOLLIN | EPOLLET;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev);
@@ -202,7 +226,7 @@ void Client::run()
                 while (!messagebuf.empty())
                 {
                     message_body data = pop();
-                    std::pair<u_char *, size_t> encodemessage = data.encode();
+                    std::pair<u_char *, size_t> encodemessage = data.encode(&encrypt_key);
                     writedata(events[i].data.fd, encodemessage.first, encodemessage.second);
                     cout<<"主线程客户端发送一条消息"<<endl;
                     do_sent(data);
@@ -224,7 +248,7 @@ void Client::run()
                 {
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
                     message_body body;
-                    body.decode(messagehead_r);
+                    body.decode_head(messagehead_r);
 
                     if (VERSION!=body.head)  // 不是协议消息
                     {
@@ -349,7 +373,7 @@ void Client::home() {
     cout<<"|              deal n:n代表以上消息对应的序号     |\n";
     cout<<"|              select x:和x聊天                |\n";
     cout<<"|              exit:退出                       |\n";
-    cout<<" ------------------------------------------- --\n\n";
+    cout<<" ---------------------------------------------\n\n";
     while (1)
     {
         int num = new_notice.size();
@@ -428,7 +452,6 @@ void Client::changechat(std::string name) {
         return;
     }
     if (!activate_room.count(name)){
-//TODO 只要当前没聊天就会创建一个文件夹，没有考虑之前文件夹已经存在的情况 
         ChatRoom *newroom = new ChatRoom(name, username, is_group);
         activate_room[name] = newroom;
     }
@@ -442,12 +465,14 @@ void Client::makeFriend(){
     string reciver_name;
     std::cout<<"请输入添加好友的名称" <<std::endl;
     std::cin>>reciver_name;
+
     //初始化一个消息体
     message_body body;
     body.type = TYPE::FRIEND;
     body.sender_ = username;
     body.receiver_ = reciver_name;
     body.head = VERSION;
+
     //放入messagebuf中
     push(body);
     
@@ -786,6 +811,38 @@ void Client::destroy(){
 
 Client::Client(const string &ip_, int port_):ip(ip_), port(port_) {
 
+}
+
+void Client::init_ssl() {
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
+    ctx=SSL_CTX_new(SSLv23_client_method());
+
+    if(ctx==NULL){
+        ERR_print_errors_fp(stdout);//  将错误打印到FILE中
+        exit(1);
+    }
+}
+
+bool Client::handshake(int fd) {
+    SSL *ssl = SSL_new(ctx);
+    SSL_set_fd(ssl,fd);
+    if(SSL_connect(ssl)==-1)
+        ERR_print_errors_fp(stderr);
+    else{
+        printf("connect with %s encryption\n",SSL_get_cipher(ssl));
+        ShowCerts(ssl);
+    }
+    if (SSL_read(ssl,Seed,32)!=32)
+        printf("handshake failure");
+    else
+        printf("handshake success\n");
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+    AES_set_decrypt_key(Seed, 256, &decrypt_key);
+    AES_set_encrypt_key(Seed, 256, &encrypt_key);
 }
 
 

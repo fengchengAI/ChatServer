@@ -10,6 +10,9 @@
 #include <map>
 #include <vector>
 #include <fstream>
+#include <openssl/rsa.h>
+#include <openssl/aes.h>
+
 #include "config.h"
 
 class message_body{
@@ -17,16 +20,20 @@ public:
         int head;
         std::string receiver_;
         std::string sender_;
-
+        size_t aes_encrypt_length;
         TYPE type;
         int message_id;
         u_char * data;
         size_t length;
         bool is_group;
         message_body(bool is_group = false):data(nullptr),message_id(0),length(0),is_group(is_group),head(VERSION){}
-        std::pair<u_char *, size_t> encode();
-        void decode(u_char *messagehead_r);
+        std::pair<u_char *, size_t> encode(const AES_KEY *);
+        void decode_head(u_char *messagehead_r);
 };
+void ssl_encrypt(const unsigned char *in, unsigned char *out,
+                 size_t in_length, const AES_KEY *key);
+void ssl_decrypt(const unsigned char *in, unsigned char *out,
+                 size_t in_length, const AES_KEY *key);
 class ChatRoom{
 public:
     void init();

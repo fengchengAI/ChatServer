@@ -19,6 +19,7 @@
 #include <memory>
 #include <unordered_map>
 
+
 #include "Server.h"
 #include "utils.h"
 #include "config.h"
@@ -28,16 +29,12 @@ using namespace std;
 static int port ;
 using mysqlx::RowResult;
 using mysqlx::Row;
+AES_KEY decrypt_key;
+AES_KEY encrypt_key;
 
-void Server::do_recv(std::string name, u_char *data, u_int32_t length, TYPE type)
-{
-
-}
-void Server::do_sent(std::string name, u_char * data, u_int32_t length, TYPE type)
-{
-}
-
-
+#ifndef USE_SSL
+#define USE_SSL
+#endif
 bool Server::init()
 {
 
@@ -82,21 +79,22 @@ bool Server::init()
     ev.events = EPOLLIN | EPOLLET;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, servicefd, &ev);
 
+    init_ssl();
     return true;
 
 }
 
 //消息池存放的是消息体（消息id,数据，长度，是否是组，头文件），没有初始化的成员（发送方，接收方名字，类型）
-message_body Server::pop(int id) {
+std::pair<u_char *, std::size_t> Server::pop(int id) {
     std::lock_guard<std::mutex> lck(lock);
 
-    message_body temp = messagebuf[id].front();
+    auto temp = messagebuf[id].front();
     messagebuf[id].pop_front();
     return temp;
 }
 
 //存放的时候也是用的消息体的形式
-void Server::push(int id, message_body data) {
+void Server::push(int id, std::pair<u_char *, std::size_t>data) {
     std::unique_lock<std::mutex> lck(lock);
     messagebuf[id].push_back(data);
     lck.unlock();
@@ -155,7 +153,7 @@ void Server::run()
 {
     while (servicefd>0)
     {
-        std::deque<message_body> temp_messagebuf; //这是临时的，每次epoll_wait循环都会清零, 最后判断接收方是否在线
+        std::deque<tuple<string, u_char *, size_t>> temp_messagebuf; //这是临时的，每次epoll_wait循环都会清零, 最后判断接收方是否在线
 
         int nfds = epoll_wait(epoll_fd, events, NUMS, -1);
         temp_messagebuf.clear();
@@ -163,14 +161,14 @@ void Server::run()
         {
             if(clientfds.count(events[i].data.fd) && events[i].events&EPOLLOUT)  // 可写 （向客户端写)
             {
-                std::cout<<"EPOLLOUT被触发"<<endl;
+                // std::cout<<"EPOLLOUT被触发"<<endl;
                 while (!messagebuf[events[i].data.fd].empty())
                 {
-                    message_body data = pop(events[i].data.fd);
+                    auto forwarddata = pop(events[i].data.fd);
                     //encode是massage-body的一个类成员函数，重新编码按照（头文件，发送方，接收方，数据）
-                    std::pair<u_char *, size_t> forwarddata = data.encode();
+                    // std::pair<u_char *, size_t> forwarddata = data.encode();
                     writedata(events[i].data.fd, forwarddata.first, forwarddata.second);
-                    std::cout<<"转发一条消息"<<endl;
+                    // std::cout<<"转发一条消息"<<endl;
                 }
                 epoll_event ev;
                 ev.data.fd = events[i].data.fd;
@@ -183,6 +181,17 @@ void Server::run()
             {
                 int n = 0; // 这里很重要只要读取到头消息，就一定要读取完整，阻塞读取直到读完一个完整的数据。即在头中指定的size
                 bzero(messagehead_r, 6);
+                /*
+                int sums = 0;
+                while ((n = read(events[i].data.fd, messagehead_r, 6))>=0){
+                    sums +=n;
+                    for (int j = 0; j < 6; ++j) {
+                        cout<<messagehead_r[j]<<"  "<< static_cast<unsigned int>(messagehead_r[j])<<endl;
+                    }
+                }
+                continue;
+                */
+                //
                 while ((n = read(events[i].data.fd, messagehead_r, 6))>=0)
                 {
                     if (n==0)
@@ -190,11 +199,11 @@ void Server::run()
                         closefd(events[i].data.fd);
                         break;
                     }
-                    
+
                     //一定要读够六个字节
                     readdata(events[i].data.fd, messagehead_r+n, 6-n);
                     message_body body;
-                    body.decode(messagehead_r);
+                    body.decode_head(messagehead_r);
                     if (body.head!=VERSION)
                     {
                         
@@ -207,13 +216,16 @@ void Server::run()
 
                         u_char receiver_[20];
                         u_char sender_[20];
-                        u_char *data = (u_char *)calloc(body.length, 1);
+                        u_char *data = (u_char *)calloc(body.aes_encrypt_length, 1);
 
                         readdata(events[i].data.fd, sender_, 20);
                         readdata(events[i].data.fd, receiver_, 20);
-                        readdata(events[i].data.fd, data, body.length);
+                        readdata(events[i].data.fd, data, body.aes_encrypt_length);
+                        u_char * decryptdata = (u_char *) calloc(body.aes_encrypt_length, 1);
+                        ssl_decrypt(data, decryptdata, body.aes_encrypt_length, &decrypt_key);
                         string name((char *)receiver_);
-                        string password = string((char *)data, 20);
+
+                        string password = string((char *)decryptdata, body.length);
                         body.length = 0;
                         body.sender_ = name;
                         body.receiver_ = name;
@@ -226,35 +238,42 @@ void Server::run()
                     {
                         u_char receiver_[20];
                         u_char sender_[20];
-                        u_char *data = (u_char *)calloc(body.length, 1);
+                        u_char *data = (u_char *)calloc(body.aes_encrypt_length, 1);
 
                         readdata(events[i].data.fd, sender_, 20);
                         readdata(events[i].data.fd, receiver_, 20);
-                        readdata(events[i].data.fd, data, body.length);
+                        readdata(events[i].data.fd, data, body.aes_encrypt_length);
+                        u_char * decryptdata = (u_char *) calloc(body.aes_encrypt_length, 1);
+                        ssl_decrypt(data, decryptdata, body.aes_encrypt_length, &decrypt_key);
+
                         string name ((char*)receiver_);
                         body.sender_ = name;
                         body.receiver_ = name;
                         body.length = 0;
-                        string password((char*)data, 20);
+                        string password((char*)decryptdata, body.length);
 
-                        //do_sign_up(body, password, sql_ptr, events[i].data.fd);
                         int tempfd = events[i].data.fd;
+
                         pool.submit([this, &body, password, tempfd](){
                             this->do_sign_up(body, password, tempfd);
                         });
                     }
                     else if (body.type == TEXT||body.type == VIDEO) // 正常聊天消息
                     {
-                        u_char receiver_[20];
-                        u_char sender_[20];
-                        u_char *data = (u_char *)calloc(body.length, 1);
-                        body.sender_ = string((char *)sender_);
-                        readdata(events[i].data.fd, sender_, 20);
-                        readdata(events[i].data.fd, receiver_, 20);
-                        readdata(events[i].data.fd, data, body.length);
+
+                        u_char *data = (u_char *)calloc(body.aes_encrypt_length+46, 1);
+                        memcpy(messagehead_r, data, 6);
+                        readdata(events[i].data.fd, data+6, 20);
+                        readdata(events[i].data.fd, data+26, 20);
+                        readdata(events[i].data.fd, data+46, body.aes_encrypt_length);
+                        //u_char * decryptdata = (u_char *) calloc(body.aes_encrypt_length, 1);
+                        //ssl_decrypt(data, decryptdata, body.aes_encrypt_length, decrypt_key);
+
                         std::vector<string>receivers;
+
                         if(body.is_group) {
-                            string content = string((char*)data);
+                            /* TODO
+                            string content((char*)decryptdata, body.length);
                             string delim = ",";
                             receivers = split(content, delim);
                             string recvdata = receivers[receivers.size()-1];
@@ -268,28 +287,23 @@ void Server::run()
                                 memcpy(data,recvdata.c_str(),recvdata.size());
                                 temp_messagebuf.push_back(body);
                             }
+                            */
                         }
                         else {
-                            body.data = data;
-                            body.receiver_ = string((char *)receiver_);
-                            temp_messagebuf.push_back(body);
+
+                            temp_messagebuf.push_back({string((char *)data+26, 20), data, body.aes_encrypt_length+46});
                         }
-                        //debug code
-                        //cout<<"收到"<<body.sender_<<"发送的消息"<<endl;
+
                     }
                     else if(body.type == FRIEND) //对方添加的好友请求(头文件，发送方，接收方)
                     {
                         cout << "服务器接受好友请求" << endl;
-                        u_char receiver_[20];
-                        u_char sender_[20];
+                        u_char *data = (u_char *)calloc(46, 1);
+                        memcpy(messagehead_r, data, 6);
+                        readdata(events[i].data.fd, data+6, 20);
+                        readdata(events[i].data.fd, data+26, 20);
 
-                        readdata(events[i].data.fd, sender_, 20);
-                        readdata(events[i].data.fd, receiver_, 20);
-
-                        body.sender_ = string((char*)sender_);
-                        body.receiver_ = string((char* )receiver_);
-
-                        temp_messagebuf.push_back(body);
+                        temp_messagebuf.push_back({string((char *)data+26, 20), data, 46});
 
                     }
 //收到回复的请求后，根据YES/NO选择更新好友列表
@@ -324,12 +338,15 @@ void Server::run()
                             readdata(events[i].data.fd, sender_, 20);
                             readdata(events[i].data.fd, receiver_, 20);
 
-                            u_char *data = (u_char *)calloc(body.length, 1);
-                            readdata(events[i].data.fd, data, body.length);
+                            u_char *data = (u_char *)calloc(body.aes_encrypt_length, 1);
+                            readdata(events[i].data.fd, data, body.aes_encrypt_length);
+
+                            u_char * decryptdata = (u_char *) calloc(body.aes_encrypt_length, 1);
+                            ssl_decrypt(data, decryptdata, body.aes_encrypt_length, &decrypt_key);
 
                             string sendname = string((char*)sender_);
                             string receivername = string((char*)receiver_);
-                            string roomname = string((char*)data);
+                            string roomname = string((char*)decryptdata, body.length);
                             cout << "通知" << receivername <<"," << sendname 
                             << "同意加入： " << roomname << endl;
 
@@ -442,18 +459,20 @@ void Server::run()
                             readdata(events[i].data.fd, sender_, 20);
                             readdata(events[i].data.fd, receiver_, 20);
 
-                            u_char *data = (u_char *)calloc(body.length, 1);
-                            readdata(events[i].data.fd, data, body.length);
                         }
                     }
                     else if(body.type == ROOM)
                     {
                         //处理群聊添加请求(接收方为群聊名字，data为群聊成员)
+                        /* TODO
+                        cout << "服务器接收加群聊消息" << endl;
+
+
                         u_char receiver_[20];
                         u_char sender_[20];
                         u_char *data = (u_char *)calloc(body.length, 1);
 
-                        cout << "服务器接收加群聊消息" << endl;
+
                         readdata(events[i].data.fd, sender_, 20);
                         readdata(events[i].data.fd, receiver_, 20);
                         readdata(events[i].data.fd, data, body.length);
@@ -477,9 +496,9 @@ void Server::run()
                         for(auto name : res)
                         {
                             body.receiver_ = name;
-                            // cout << name <<endl;
                             temp_messagebuf.push_back(body);
                         }
+                        */
                     }
                 }
             }
@@ -489,6 +508,9 @@ void Server::run()
                 sockaddr_in remote;
                 socklen_t remotelen = sizeof(struct sockaddr);
                 while ((conn_sock = accept(servicefd, (struct sockaddr *) &remote, &remotelen)) > 0) {
+#ifdef USE_SSL
+                    if(!ssl_handshake(conn_sock)) continue;
+#endif
                     setSockNonBlock(conn_sock);
                     epoll_event ev;
                     ev.data.fd = conn_sock;
@@ -504,29 +526,23 @@ void Server::run()
             if (servicefd == events[i].data.fd && events[i].events& EPOLLHUP) {
                 cout<<"closed"<<endl;
             }
-            //TODO 如果客户端退出，关闭fd，
         }
-
 
         while (!temp_messagebuf.empty())
         {
-            message_body frontbody = temp_messagebuf.front();
+            auto frontbody = temp_messagebuf.front();
             std::cout<<"收到一条消息"<<endl;
-            // if (frontbody.is_group)
-            // {
-            //    //TODO 群聊数据
-            //    /* code */
-            // }else{
-                if (name2id.count(frontbody.receiver_))
-                {
-                    int id = name2id.at(frontbody.receiver_);
-                    push(id, frontbody);
- 
-                }else{
-                    if (frontbody.type != VIDEO)
-                        insertOffHistory(frontbody);
-                }
-            //}
+
+            if (name2id.count(std::get<0>(frontbody)))
+            {
+                int id = name2id.at(std::get<0>(frontbody));
+                push(id, {std::get<1>(frontbody), std::get<2>(frontbody)});
+
+            }else{
+                // TODO
+                //if (frontbody.type != VIDEO)
+                //    insertOffHistory(frontbody);
+            }
             temp_messagebuf.pop_front();
         }
         
@@ -562,6 +578,7 @@ void Server::destroy()
         close(fd);
     }
     pool.shutdown();
+    SSL_CTX_free(ctx);
 }
 
 Server::~Server()
@@ -599,7 +616,7 @@ void Server::loadOffHistory(std::string name) {
         memcpy(temp, s.c_str(), s.length());
         body.data = temp;
         body.length = s.length();
-        push(id, body);
+        push(id, body.encode(&encrypt_key));
         table.remove().where("id = :id_ ")
                 .bind("id_", r[0].operator int ())
                 .execute();
@@ -669,7 +686,7 @@ void Server::loadAccountInfo(std::string name){
     memcpy(tempdata, s.c_str(), s.length());
     body.length = s.length();
     body.data = tempdata;
-    push(name2id[name], body);
+    push(name2id[name], body.encode(&encrypt_key));
 
    
 }
@@ -703,7 +720,7 @@ void Server::do_sign_in(message_body &body, string const & password, int fd){
         */
     }else {
         body.type = TYPE::NO;
-        push(fd, body);
+        push(fd, body.encode(&encrypt_key));
 
     }
 }
@@ -729,11 +746,69 @@ void Server::do_sign_up(message_body &body, string const & password, int fd){
                 .values(name, password, 0, getDateTime(), true)
                 .execute();
     }
-    
-    push(fd, body);
+
+    push(fd, body.encode(&encrypt_key));
 
 }
 
+void Server::init_ssl() {
+    SSL_library_init();
+    /* 载入所有 SSL 算法 */
+    OpenSSL_add_all_algorithms();
+    /* 载入所有 SSL 错误消息 */
+    SSL_load_error_strings();
+    /* 以 SSL V2 和 V3 标准兼容方式产生一个 SSL_CTX ，即 SSL Content Text */
+    ctx = SSL_CTX_new(SSLv23_server_method());
+    /* 也可以用 SSLv2_server_method() 或 SSLv3_server_method() 单独表示 V2 或 V3标准 */
+    if (ctx == NULL) {
+        ERR_print_errors_fp(stdout);
+        exit(1);
+    }
+    /* 载入用户的数字证书， 此证书用来发送给客户端。 证书里包含有公钥 */
+    if (SSL_CTX_use_certificate_file(ctx, "/home/feng/Github/CLionProjects/untitled/cacert.pem", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stdout);
+        exit(1);
+    }
+    /* 载入用户私钥 */
+    if (SSL_CTX_use_PrivateKey_file(ctx, "/home/feng/Github/CLionProjects/untitled/privkey.pem", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stdout);
+        exit(1);
+    }
+    /* 检查用户私钥是否正确 */
+    if (!SSL_CTX_check_private_key(ctx)) {
+        ERR_print_errors_fp(stdout);
+        exit(1);
+    }
+    for (int i = 0; i < 32; ++i) {
+        Seed[i] = getRandValue();
+    }
+    AES_set_decrypt_key(Seed, 256, &decrypt_key);
+    AES_set_encrypt_key(Seed, 256, &encrypt_key);
+
+}
+
+bool Server::ssl_handshake(int fd) {
+    SSL *ssl;
+    ssl = SSL_new(ctx);
+    /* 将连接用户的 socket 加入到 SSL */
+    SSL_set_fd(ssl, fd);
+    /* 建立 SSL 连接 */
+    if (SSL_accept(ssl) == -1) {
+        perror("accept");
+        close(fd);
+        return false;
+    }
+
+    if (SSL_write(ssl, Seed, 32)!=32)
+        return false;
+    unsigned char asd[24];
+    SSL_read(ssl, asd, 24);
+    /* 关闭 SSL 连接 */
+    SSL_shutdown(ssl);
+    /* 释放 SSL */
+    SSL_free(ssl);
+    return true;
+}
 
 
 void handle(int)

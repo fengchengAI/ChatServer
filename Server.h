@@ -11,10 +11,14 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #include "Sql.h"
 #include "config.h"
 #include "ChatRoom.h"
 #include "ThreadPool.h"
+
 #define NUMS 100
 
 class Server
@@ -32,19 +36,21 @@ private:
     u_char messagehead_r[6];
     u_char messagehead_w[6];  // 写数据用到的
 
-    std::map<int, std::deque<message_body>> messagebuf;
+    std::map<int, std::deque<std::pair<u_char *, size_t>>> messagebuf;
     std::mutex lock;    
     std::mutex etmutex;
+    SSL_CTX *ctx;
+    unsigned char Seed[32];
 
 public:
     void closefd(int sockfd);
     Server();
     ~Server();
+    void init_ssl();
+    bool ssl_handshake(int fd);
 
-    void do_recv(std::string name, u_char *data, u_int32_t length, TYPE type);
-    void do_sent(std::string name, u_char * data, u_int32_t length, TYPE type);
-    message_body pop(int);
-    void push(int id, message_body data);
+    std::pair<u_char *, std::size_t> pop(int);
+    void push(int id, std::pair<u_char *, std::size_t> data);
     bool init();
     void do_sign_in(message_body &body, string const & password, int fd);
     void do_sign_up(message_body &body, string const & password, int fd);

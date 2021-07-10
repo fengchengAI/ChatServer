@@ -9,7 +9,11 @@
 #include <sys/epoll.h>
 #include <mutex>
 #include <condition_variable>
-
+#include <openssl/rsa.h>
+#include <openssl/aes.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/ossl_typ.h>
 #include "config.h"
 #include "Account.h"
 #include "ChatRoom.h"
@@ -40,7 +44,7 @@ private:
     std::condition_variable cn;
     std::string rootpath;
     std::string ip;
-
+    unsigned char Seed[32];
     int client_fd;
     u_char messagehead_r[6];
     u_char messagehead_w[6];  // 写数据用到的
@@ -83,8 +87,10 @@ public:
     void parseAccount(char *data, int length);
     int parse(std::string command, std::string filter = string());
     bool response();
-
+    SSL_CTX *ctx;
 //处理消息
+    void init_ssl();
+    bool handshake(int fd);
     void deal_mes(int id);
     void ui();
     void showfriend();

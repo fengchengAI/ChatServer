@@ -10,23 +10,33 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cmath>
 
 #include "utils.h"
 #include "config.h"
 
-void message_body::decode(u_char *messagehead_r) {
+
+void message_body::decode_head(u_char *messagehead_r) {
     length = static_cast<u_int32_t >(messagehead_r[5] + (messagehead_r[4]<<8) + (messagehead_r[3]<<16) + (messagehead_r[2]<<24));
     type = static_cast<TYPE>(messagehead_r[0] & 0x0f);
     head = static_cast<u_int8_t >(messagehead_r[0]) >>4;
     is_group = static_cast<bool>(messagehead_r[1]&0x01);
+    aes_encrypt_length = get_aes_encrypt_length(length);
 
 }
 
-std::pair<u_char *, size_t> message_body::encode() {
+std::pair<u_char *, size_t> message_body::encode(const AES_KEY *encrypt_key) {
+    // 这个函数执行完，data就是秘文了
 
-    size_t lengthdata = 46+length;
+    aes_encrypt_length = get_aes_encrypt_length(length);  //密文长度
+
+    size_t lengthdata = 46+aes_encrypt_length;
 
     u_char *returndata = (u_char *)calloc(lengthdata, 1);
+
+    ssl_encrypt(data, returndata+46, length, encrypt_key);
+    free(data);
+
     returndata[0] = type + (VERSION<<4);
     returndata[1] = is_group?0x01:0x00;
     returndata[2] = length >>24;
@@ -37,10 +47,7 @@ std::pair<u_char *, size_t> message_body::encode() {
     memcpy(returndata+6, sender_.c_str(), sender_.length());
     memcpy(returndata+26, receiver_.c_str(), receiver_.length());
 
-    //拷贝data
-    memcpy(returndata+lengthdata-length, data, length);
-    free(data);
-    data = returndata+lengthdata-length;
+    data = returndata+46;
 
     return {returndata, lengthdata};
 }
@@ -89,4 +96,18 @@ void ChatRoom::insert(std::string str) {
     }else{
         std::cout<<"log文本打开失败"<<std::endl;
     }
+}
+
+void
+ssl_encrypt(const unsigned char *in, unsigned char *out, size_t in_length, const AES_KEY *key) {
+    unsigned char ivec[16];
+
+    AES_cbc_encrypt(in, out, in_length, key, ivec, AES_ENCRYPT);
+}
+
+void
+ssl_decrypt(const unsigned char *in, unsigned char *out, size_t in_length, const AES_KEY *key) {
+    unsigned char ivec[16];
+
+    AES_cbc_encrypt(in, out, in_length, key, ivec, AES_DECRYPT);
 }

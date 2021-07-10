@@ -123,3 +123,10 @@ std::pair<std::string, std::string> getAccountInfo(u_char *s, size_t length){
     string passwad;
     return {name, passwad};
 }
+
+size_t get_aes_encrypt_length(size_t in) {
+    size_t out_length = static_cast<int >(in%16)*16;  //密文长度
+    if (in%16)
+        out_length+=16;
+    return out_length;
+}

@@ -9,6 +9,7 @@
 #include <string>
 #include <iostream>
 #include <mysqlx/xdevapi.h>
+
 using mysqlx::Session;
 using std::cout;
 using std::endl;

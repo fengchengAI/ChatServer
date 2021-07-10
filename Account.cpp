@@ -4,9 +4,7 @@
 
 #include <string>
 
-
 #include "Account.h"
-
 
 
 std::vector<std::string> const & Account::getfriends() const{
